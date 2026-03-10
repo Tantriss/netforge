@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="netforge — Multi-vendor network config converter. HP Comware ↔ AlliedWare Plus. CLI tool and Python library.">
+  <meta name="author" content="Tantriss">
+  <title>netforge — Multi-vendor network config converter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* ── Reset & Root ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-base:        #0a0a0a;
+      --bg-surface:     #111111;
+      --bg-raised:      #161616;
+      --bg-card:        #0f0f0f;
+      --green:          #00ff41;
+      --green-dim:      #00cc33;
+      --green-glow:     rgba(0, 255, 65, 0.15);
+      --green-glow-sm:  rgba(0, 255, 65, 0.08);
+      --amber:          #ffb800;
+      --amber-glow:     rgba(255, 184, 0, 0.15);
+      --cyan:           #00d4ff;
+      --cyan-glow:      rgba(0, 212, 255, 0.15);
+      --text-primary:   #e0e0e0;
+      --text-secondary: #888;
+      --text-dim:       #555;
+      --border:         #1e1e1e;
+      --border-bright:  #2a2a2a;
+      --font:           'JetBrains Mono', 'Fira Code', monospace;
+      --radius:         2px;
+      --transition:     150ms ease;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── Scanlines overlay ── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.04) 2px,
+        rgba(0, 0, 0, 0.04) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── Noise grain ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9998;
+      opacity: 0.4;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { font-family: var(--font); cursor: pointer; }
+
+    /* ── Utilities ── */
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .green  { color: var(--green); }
+    .amber  { color: var(--amber); }
+    .cyan   { color: var(--cyan); }
+    .dim    { color: var(--text-dim); }
+    .secondary { color: var(--text-secondary); }
+
+    /* ── Scroll reveal ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 500ms ease, transform 500ms ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Cursor blink ── */
+    @keyframes blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+    .cursor {
+      display: inline-block;
+      color: var(--green);
+      animation: blink 500ms step-end infinite;
+    }
+
+    /* ── Status pulse ── */
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 65, 0.5); }
+      50% { box-shadow: 0 0 0 4px rgba(0, 255, 65, 0); }
+    }
+
+    /* ── Navbar ── */
+    .navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: rgba(10, 10, 10, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      height: 52px;
+    }
+
+    .navbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 100%;
+      padding: 0 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .navbar-brand {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--green);
+      letter-spacing: 0.05em;
+    }
+
+    .navbar-brand span {
+      color: var(--text-dim);
+      font-weight: 400;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      padding: 3px 10px;
+      background: var(--bg-surface);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .navbar-links {
+      display: flex;
+      gap: 20px;
+      list-style: none;
+    }
+
+    .navbar-links a {
+      font-size: 12px;
+      color: var(--text-secondary);
+      transition: color var(--transition);
+    }
+
+    .navbar-links a:hover { color: var(--green); }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 120px 24px 80px;
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .hero-left {}
+
+    .hero-prompt {
+      font-size: 12px;
+      color: var(--green);
+      margin-bottom: 16px;
+      letter-spacing: 0.1em;
+    }
+
+    .hero-title {
+      font-size: clamp(32px, 4vw, 52px);
+      font-weight: 700;
+      line-height: 1.15;
+      margin-bottom: 20px;
+      color: var(--text-primary);
+    }
+
+    .hero-title .green { color: var(--green); }
+
+    .hero-sub {
+      font-size: 15px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+      margin-bottom: 32px;
+      max-width: 420px;
+    }
+
+    .install-bar {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      border: 1px solid var(--border-bright);
+      background: var(--bg-surface);
+      margin-bottom: 28px;
+      max-width: 380px;
+    }
+
+    .install-cmd {
+      flex: 1;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--green);
+      font-family: var(--font);
+    }
+
+    .btn-copy {
+      padding: 10px 16px;
+      font-size: 11px;
+      background: var(--bg-raised);
+      border: none;
+      border-left: 1px solid var(--border-bright);
+      color: var(--text-secondary);
+      letter-spacing: 0.08em;
+      transition: color var(--transition), background var(--transition);
+      white-space: nowrap;
+    }
+
+    .btn-copy:hover { color: var(--green); background: var(--bg-card); }
+
+    .hero-meta {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .hero-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .hero-meta-item svg {
+      width: 12px;
+      height: 12px;
+      opacity: 0.5;
+    }
+
+    /* ── Terminal conversion panel ── */
+    .terminal-pair {
+      display: flex;
+      gap: 0;
+      position: relative;
+    }
+
+    .term-panel {
+      flex: 1;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-bright);
+      overflow: hidden;
+    }
+
+    .term-panel:first-child { border-right: none; }
+
+    .term-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-raised);
+    }
+
+    .term-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .term-title {
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      flex: 1;
+      text-align: center;
+    }
+
+    .term-body {
+      padding: 12px;
+      min-height: 220px;
+    }
+
+    .term-line {
+      font-size: 11px;
+      line-height: 1.8;
+      white-space: nowrap;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 200ms;
+    }
+
+    .term-line.visible { opacity: 1; }
+
+    .term-line .kw  { color: var(--amber); }
+    .term-line .val { color: var(--cyan); }
+    .term-line .cmd { color: var(--green); }
+    .term-line .cmt { color: var(--text-dim); }
+
+    .term-arrow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px;
+      color: var(--green);
+      background: var(--bg-base);
+      border: 1px solid var(--border-bright);
+      padding: 6px 8px;
+      line-height: 1;
+      z-index: 2;
+    }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-surface);
+      padding: 0;
+    }
+
+    .stats-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      padding: 0 24px;
+    }
+
+    .stat-item {
+      flex: 1;
+      padding: 22px 0;
+      text-align: center;
+      border-right: 1px solid var(--border);
+      cursor: default;
+      transition: background var(--transition);
+    }
+
+    .stat-item:last-child { border-right: none; }
+    .stat-item:hover { background: var(--bg-raised); }
+
+    .stat-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--green);
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.12em;
+      display: block;
+      margin-top: 3px;
+    }
+
+    /* ── Section layout ── */
+    .section {
+      padding: 80px 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .section-title {
+      font-size: 11px;
+      color: var(--green);
+      letter-spacing: 0.15em;
+      margin-bottom: 40px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Install terminal ── */
+    .install-terminal {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-bright);
+      max-width: 720px;
+    }
+
+    .install-terminal-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-raised);
+    }
+
+    .terminal-dots {
+      display: flex;
+      gap: 5px;
+    }
+
+    .t-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .t-dot.red    { background: #ff5f57; }
+    .t-dot.yellow { background: #ffbd2e; }
+    .t-dot.green  { background: #28c840; }
+
+    .terminal-title {
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+    }
+
+    .install-terminal-body {
+      padding: 20px;
+    }
+
+    .tl {
+      font-size: 12px;
+      line-height: 2;
+      opacity: 0;
+      transition: opacity 300ms;
+    }
+
+    .tl.show { opacity: 1; }
+
+    .tl .prompt { color: var(--green); }
+    .tl .cmd-text { color: var(--text-primary); }
+    .tl .out-ok  { color: var(--green); }
+    .tl .out-dim { color: var(--text-dim); }
+    .tl .out-key { color: var(--amber); }
+    .tl .out-val { color: var(--cyan); }
+
+    /* ── Feature cards ── */
+    .vendor-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .vendor-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-bright);
+      padding: 20px;
+      transition: box-shadow var(--transition), border-color var(--transition);
+      cursor: default;
+    }
+
+    .vendor-card:hover {
+      box-shadow: 0 0 24px var(--green-glow);
+      border-color: rgba(0, 255, 65, 0.3);
+    }
+
+    .vendor-card.coming-soon:hover {
+      box-shadow: 0 0 24px var(--amber-glow);
+      border-color: rgba(255, 184, 0, 0.3);
+    }
+
+    .vendor-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .vendor-name {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: 0.08em;
+    }
+
+    .vendor-status {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+    }
+
+    .vendor-status.ok    { color: var(--green); }
+    .vendor-status.soon  { color: var(--amber); }
+
+    .status-indicator {
+      font-size: 10px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 16px;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      padding: 3px 0;
+    }
+
+    .feature-item .fi-check { color: var(--green); }
+    .feature-item .fi-soon  { color: var(--text-dim); }
+    .feature-item.grayed    { color: var(--text-dim); }
+
+    /* ── Live demo ── */
+    .demo-section {
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 80px 24px;
+      text-align: center;
+    }
+
+    .demo-inner {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .demo-tagline {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 32px;
+      line-height: 1.7;
+    }
+
+    .btn-demo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 32px;
+      background: transparent;
+      border: 1px solid var(--green);
+      color: var(--green);
+      font-size: 13px;
+      font-family: var(--font);
+      letter-spacing: 0.1em;
+      transition: background var(--transition), box-shadow var(--transition);
+      cursor: pointer;
+    }
+
+    .btn-demo:hover {
+      background: var(--green-glow-sm);
+      box-shadow: 0 0 24px var(--green-glow);
+    }
+
+    .demo-note {
+      margin-top: 20px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* ── Use cases ── */
+    .usecases-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border: 1px solid var(--border);
+    }
+
+    .usecase-entry {
+      display: flex;
+      gap: 24px;
+      padding: 24px;
+      border-bottom: 1px solid var(--border);
+      transition: background var(--transition);
+      cursor: default;
+    }
+
+    .usecase-entry:last-child { border-bottom: none; }
+    .usecase-entry:hover { background: var(--bg-surface); }
+
+    .usecase-tag {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      padding: 3px 8px;
+      border: 1px solid;
+      white-space: nowrap;
+      align-self: flex-start;
+      margin-top: 2px;
+    }
+
+    .usecase-tag.msp         { color: var(--green); border-color: rgba(0,255,65,0.3); }
+    .usecase-tag.integrator  { color: var(--cyan); border-color: rgba(0,212,255,0.3); }
+    .usecase-tag.neteng      { color: var(--amber); border-color: rgba(255,184,0,0.3); }
+
+    .usecase-text {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    .usecase-text strong { color: var(--text-primary); }
+
+    /* ── Python library ── */
+    .code-block {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-bright);
+      overflow: hidden;
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-raised);
+    }
+
+    .code-lang {
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+
+    .code-body {
+      padding: 24px;
+      overflow-x: auto;
+    }
+
+    .code-body pre {
+      font-size: 12px;
+      line-height: 1.9;
+      font-family: var(--font);
+      white-space: pre;
+    }
+
+    /* Manual syntax highlighting */
+    .py-kw    { color: #c792ea; }  /* keyword: import, from, print */
+    .py-fn    { color: var(--green); }    /* function calls */
+    .py-str   { color: var(--amber); }   /* strings */
+    .py-cmt   { color: var(--text-dim); font-style: italic; } /* comments */
+    .py-var   { color: var(--cyan); }    /* variables */
+    .py-num   { color: #f78c6c; }        /* numbers */
+    .py-op    { color: var(--text-secondary); } /* operators */
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 24px;
+    }
+
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .footer-left {
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.8;
+    }
+
+    .footer-left strong { color: var(--text-secondary); }
+
+    .footer-links {
+      display: flex;
+      gap: 20px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      transition: color var(--transition);
+    }
+
+    .footer-links a:hover { color: var(--green); }
+
+    .footer-motto {
+      width: 100%;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .hero {
+        grid-template-columns: 1fr;
+        padding-top: 90px;
+        min-height: auto;
+        gap: 40px;
+      }
+
+      .stats-inner {
+        flex-wrap: wrap;
+      }
+
+      .stat-item {
+        flex: 1 1 33%;
+        border-right: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .vendor-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .navbar-links { display: none; }
+
+      .status-badge { display: none; }
+
+      .footer-inner { flex-direction: column; }
+
+      .terminal-pair { flex-direction: column; }
+      .term-panel:first-child { border-right: 1px solid var(--border-bright); border-bottom: none; }
+      .term-arrow { display: none; }
+
+      .usecase-entry { flex-direction: column; gap: 12px; }
+    }
+
+    @media (max-width: 480px) {
+      .stat-item { flex: 1 1 50%; }
+      .hero-title { font-size: 28px; }
+    }
+
+    /* ── Reduced motion ── */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+      .reveal { opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Navbar ── -->
+  <nav class="navbar" role="navigation" aria-label="Main navigation">
+    <div class="navbar-inner">
+      <div class="navbar-brand">netforge <span>v1.0.0</span></div>
+
+      <div class="status-badge" aria-label="Service status: online">
+        <span class="status-dot" aria-hidden="true"></span>
+        STATUS: ONLINE
+      </div>
+
+      <ul class="navbar-links">
+        <li>
+          <a href="https://github.com/Tantriss/netforge" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository">
+            <!-- GitHub SVG icon -->
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="vertical-align:middle;margin-right:4px;">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+            </svg>
+            GitHub
+          </a>
+        </li>
+        <li>
+          <a href="https://pypi.org/project/netforge" target="_blank" rel="noopener noreferrer">PyPI</a>
+        </li>
+        <li>
+          <a href="#install">Docs</a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ── Hero ── -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-left reveal">
+      <div class="hero-prompt" aria-hidden="true">&gt; netforge_</div>
+
+      <h1 class="hero-title" id="hero-title">
+        Multi-vendor<br>
+        network config<br>
+        <span class="green">converter</span><span class="cursor" aria-hidden="true">_</span>
+      </h1>
+
+      <p class="hero-sub">
+        HP Comware &harr; AlliedWare Plus.<br>
+        Paste a config. Get the other vendor.<br>
+        No login. No cloud. No nonsense.
+      </p>
+
+      <div class="install-bar" role="group" aria-label="Install command">
+        <span class="install-cmd" aria-label="pip install netforge">$ pip install netforge</span>
+        <button class="btn-copy" id="copyBtn" aria-label="Copy install command to clipboard">COPY</button>
+      </div>
+
+      <div class="hero-meta">
+        <span class="hero-meta-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <a href="https://github.com/Tantriss/netforge" target="_blank" rel="noopener noreferrer" class="secondary">GitHub</a>
+        </span>
+        <span class="hero-meta-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <a href="https://pypi.org/project/netforge" target="_blank" rel="noopener noreferrer" class="secondary">PyPI</a>
+        </span>
+        <span class="hero-meta-item secondary">MIT License</span>
+      </div>
+    </div>
+
+    <!-- Terminal conversion animation -->
+    <div class="terminal-pair reveal" aria-label="Live conversion example: HP Comware to AlliedWare Plus" role="img">
+      <div class="term-panel" aria-hidden="true">
+        <div class="term-header">
+          <div class="term-dot" style="background:#ff5f57"></div>
+          <div class="term-dot" style="background:#ffbd2e"></div>
+          <div class="term-dot" style="background:#28c840"></div>
+          <span class="term-title">INPUT &mdash; HP Comware</span>
+        </div>
+        <div class="term-body" id="termLeft"></div>
+      </div>
+
+      <div class="term-arrow" aria-hidden="true">&rarr;</div>
+
+      <div class="term-panel" aria-hidden="true">
+        <div class="term-header">
+          <div class="term-dot" style="background:#ff5f57"></div>
+          <div class="term-dot" style="background:#ffbd2e"></div>
+          <div class="term-dot" style="background:#28c840"></div>
+          <span class="term-title">OUTPUT &mdash; AlliedWare Plus</span>
+        </div>
+        <div class="term-body" id="termRight"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Stats bar ── -->
+  <div class="stats-bar" aria-label="Project statistics">
+    <div class="stats-inner">
+      <div class="stat-item reveal">
+        <span class="stat-value green">2</span>
+        <span class="stat-label">VENDORS</span>
+      </div>
+      <div class="stat-item reveal">
+        <span class="stat-value green">20+</span>
+        <span class="stat-label">FEATURES</span>
+      </div>
+      <div class="stat-item reveal">
+        <span class="stat-value green">62</span>
+        <span class="stat-label">TESTS</span>
+      </div>
+      <div class="stat-item reveal">
+        <span class="stat-value green">0</span>
+        <span class="stat-label">DEPS*</span>
+      </div>
+      <div class="stat-item reveal">
+        <span class="stat-value green">MIT</span>
+        <span class="stat-label">LICENSE</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Install ── -->
+  <section class="section" id="install" aria-labelledby="install-title">
+    <div class="section-title" id="install-title">// DEPLOY IN 30 SECONDS</div>
+
+    <div class="install-terminal reveal">
+      <div class="install-terminal-header">
+        <div class="terminal-dots">
+          <span class="t-dot red"></span>
+          <span class="t-dot yellow"></span>
+          <span class="t-dot green"></span>
+        </div>
+        <span class="terminal-title">bash &mdash; netforge quick start</span>
+      </div>
+      <div class="install-terminal-body" id="installTerminal" aria-label="Installation terminal output">
+        <!-- Lines injected by JS -->
+      </div>
+    </div>
+
+    <p style="margin-top:12px;font-size:11px;color:var(--text-dim);">
+      * <span class="amber">click</span> is the only runtime dependency.
+    </p>
+  </section>
+
+  <!-- ── Features / Vendors ── -->
+  <section class="section" aria-labelledby="vendors-title">
+    <div class="section-title" id="vendors-title">// SUPPORTED VENDORS</div>
+
+    <div class="vendor-grid">
+
+      <!-- HP Comware -->
+      <div class="vendor-card reveal" role="article" aria-label="HP Comware — Supported">
+        <div class="vendor-card-header">
+          <span class="vendor-name">HP COMWARE</span>
+          <span class="vendor-status ok" aria-label="Status: Supported">
+            <span class="status-indicator" aria-hidden="true">&#9679;</span> SUPPORTED
+          </span>
+        </div>
+        <div class="feature-grid">
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> VLANs</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> TACACS+</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> Interfaces</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> RADIUS</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> SVIs</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> SSH</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> dot1x</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> NTP</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> MAC auth</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> SNMP</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> STP edge</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> Static routes</div>
+        </div>
+      </div>
+
+      <!-- AlliedWare Plus -->
+      <div class="vendor-card reveal" role="article" aria-label="AlliedWare Plus — Supported">
+        <div class="vendor-card-header">
+          <span class="vendor-name">ALLIEDWARE PLUS</span>
+          <span class="vendor-status ok" aria-label="Status: Supported">
+            <span class="status-indicator" aria-hidden="true">&#9679;</span> SUPPORTED
+          </span>
+        </div>
+        <div class="feature-grid">
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> VLANs</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> TACACS+</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> Interfaces</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> RADIUS</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> SVIs</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> SSH</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> dot1x</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> NTP</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> MAC auth</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> SNMP</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> STP edge</div>
+          <div class="feature-item"><span class="fi-check" aria-hidden="true">&#10003;</span> Static routes</div>
+        </div>
+      </div>
+
+      <!-- Cisco IOS — coming soon -->
+      <div class="vendor-card coming-soon reveal" role="article" aria-label="Cisco IOS — Coming soon">
+        <div class="vendor-card-header">
+          <span class="vendor-name" style="color:var(--text-dim)">CISCO IOS</span>
+          <span class="vendor-status soon" aria-label="Status: Coming soon">
+            <span class="status-indicator" aria-hidden="true">&#9675;</span> COMING SOON
+          </span>
+        </div>
+        <div class="feature-grid">
+          <div class="feature-item grayed"><span class="fi-soon" aria-hidden="true">&#9675;</span> VLANs</div>
+          <div class="feature-item grayed"><span class="fi-soon" aria-hidden="true">&#9675;</span> TACACS+</div>
+          <div class="feature-item grayed"><span class="fi-soon" aria-hidden="true">&#9675;</span> Interfaces</div>
+          <div class="feature-item grayed"><span class="fi-soon" aria-hidden="true">&#9675;</span> RADIUS</div>
+          <div class="feature-item grayed"><span class="fi-soon" aria-hidden="true">&#9675;</span> SVIs</div>
+          <div class="feature-item grayed"><span class="fi-soon" aria-hidden="true">&#9675;</span> SSH</div>
+          <div class="feature-item grayed"><span class="fi-soon" aria-hidden="true">&#9675;</span> dot1x</div>
+          <div class="feature-item grayed"><span class="fi-soon" aria-hidden="true">&#9675;</span> NTP</div>
+          <div class="feature-item grayed"><span class="fi-soon" aria-hidden="true">&#9675;</span> MAC auth</div>
+          <div class="feature-item grayed"><span class="fi-soon" aria-hidden="true">&#9675;</span> SNMP</div>
+          <div class="feature-item grayed"><span class="fi-soon" aria-hidden="true">&#9675;</span> STP edge</div>
+          <div class="feature-item grayed"><span class="fi-soon" aria-hidden="true">&#9675;</span> Static routes</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Live demo ── -->
+  <div class="demo-section" aria-labelledby="demo-title">
+    <div class="demo-inner reveal">
+      <div class="section-title" id="demo-title" style="justify-content:center;">// LIVE DEMO &mdash; NO INSTALL REQUIRED</div>
+      <p class="demo-tagline">
+        The standalone HTML tool runs entirely in your browser.<br>
+        No server. No account. No telemetry.
+      </p>
+      <a href="../transpiler-v3_1.html" target="_blank" rel="noopener noreferrer">
+        <button class="btn-demo" aria-label="Launch browser demo">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          LAUNCH DEMO
+        </button>
+      </a>
+      <p class="demo-note">// Also available as <span class="green">pip install netforge</span> for CLI and Python library usage</p>
+    </div>
+  </div>
+
+  <!-- ── Use cases ── -->
+  <section class="section" aria-labelledby="usecases-title">
+    <div class="section-title" id="usecases-title">// WHO USES NETFORGE</div>
+
+    <div class="usecases-list reveal">
+      <div class="usecase-entry">
+        <span class="usecase-tag msp" aria-label="Use case: MSP">MSP</span>
+        <p class="usecase-text">
+          <strong>Migrate 50 switches in one bash loop.</strong>
+          Bill your client for 2 days, finish in 30 minutes.
+          <code style="color:var(--cyan);font-size:11px;display:block;margin-top:8px;color:var(--text-dim);">
+            for f in configs/*.txt; do netforge "$f" --to allied -o out/; done
+          </code>
+        </p>
+      </div>
+      <div class="usecase-entry">
+        <span class="usecase-tag integrator" aria-label="Use case: Integrator">INTEGRATOR</span>
+        <p class="usecase-text">
+          <strong>Automate config generation in your GitOps pipeline.</strong>
+          One API call, vendor-agnostic output. Feed it your IR, get any vendor's syntax out.
+        </p>
+      </div>
+      <div class="usecase-entry">
+        <span class="usecase-tag neteng" aria-label="Use case: Network Engineer">NET ENG</span>
+        <p class="usecase-text">
+          <strong>Stop rewriting configs by hand.</strong>
+          Paste HP, get Allied. Paste Allied, get HP. Or pipe directly from the switch:
+          <code style="color:var(--cyan);font-size:11px;display:block;margin-top:8px;color:var(--text-dim);">
+            ssh admin@switch "display current-configuration" | netforge --from hp --to allied
+          </code>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Python library ── -->
+  <section class="section" aria-labelledby="lib-title">
+    <div class="section-title" id="lib-title">// PYTHON LIBRARY</div>
+
+    <div class="code-block reveal">
+      <div class="code-header">
+        <span class="code-lang">PYTHON 3.9+</span>
+        <span class="secondary" style="font-size:11px;">netforge &mdash; public API</span>
+      </div>
+      <div class="code-body">
+        <pre><code><span class="py-kw">import</span> <span class="py-var">netforge</span>
+
+<span class="py-cmt"># Auto-detect source vendor</span>
+<span class="py-var">allied</span> <span class="py-op">=</span> <span class="py-fn">netforge.convert</span>(hp_config,     <span class="py-fn">to</span><span class="py-op">=</span><span class="py-str">"allied"</span>)
+<span class="py-var">hp</span>     <span class="py-op">=</span> <span class="py-fn">netforge.convert</span>(allied_config, <span class="py-fn">to</span><span class="py-op">=</span><span class="py-str">"hp"</span>)
+
+<span class="py-cmt"># Lower-level API — access the intermediate model</span>
+<span class="py-kw">from</span> <span class="py-var">netforge.parsers.hp</span> <span class="py-kw">import</span> <span class="py-var">HPParser</span>
+
+<span class="py-var">model</span> <span class="py-op">=</span> <span class="py-fn">HPParser</span>().<span class="py-fn">parse</span>(raw_config)
+<span class="py-fn">print</span>(<span class="py-str">f"</span><span class="py-var">{len(model.vlans)}</span><span class="py-str"> VLANs, </span><span class="py-var">{len(model.interfaces)}</span><span class="py-str"> interfaces"</span>)
+
+<span class="py-cmt"># Check warnings from the conversion</span>
+<span class="py-kw">for</span> <span class="py-var">w</span> <span class="py-kw">in</span> <span class="py-var">model.warnings</span>:
+    <span class="py-fn">print</span>(<span class="py-str">f"  ! </span><span class="py-var">{w}</span><span class="py-str">"</span>)</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer class="footer" role="contentinfo">
+    <div class="footer-inner">
+      <div class="footer-left">
+        <strong>netforge v1.0.0</strong> &mdash; MIT License<br>
+        Built by <span style="color:var(--green)">Tantriss</span>
+      </div>
+
+      <ul class="footer-links">
+        <li><a href="https://github.com/Tantriss/netforge" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+        <li><a href="https://pypi.org/project/netforge" target="_blank" rel="noopener noreferrer">PyPI</a></li>
+        <li><a href="https://github.com/Tantriss/netforge/issues" target="_blank" rel="noopener noreferrer">Issues</a></li>
+      </ul>
+
+      <p class="footer-motto">
+        <span class="dim">// More vendors coming. Contributions welcome.</span>
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    'use strict';
+
+    // ── Hero terminal data ──
+    const HP_LINES = [
+      { cls: 'cmd',  text: 'sysname SW-CORE-01' },
+      { cls: 'kw',   text: 'vlan 10' },
+      { cls: '',     text: ' name Management' },
+      { cls: 'kw',   text: 'vlan 20' },
+      { cls: '',     text: ' name Production' },
+      { cls: 'kw',   text: 'interface GigabitEthernet1/0/1' },
+      { cls: '',     text: ' port link-type trunk' },
+      { cls: '',     text: ' port trunk permit vlan 10 20' },
+      { cls: 'kw',   text: 'interface Vlan-interface10' },
+      { cls: 'val',  text: ' ip address 10.0.0.1 255.255.255.0' },
+      { cls: 'kw',   text: 'radius scheme CORP' },
+      { cls: 'val',  text: ' primary authentication 10.0.1.10' },
+      { cls: 'cmt',  text: ' key cipher <MASKED>' },
+    ];
+
+    const ALLIED_LINES = [
+      { cls: 'cmd',  text: 'hostname SW-CORE-01' },
+      { cls: 'kw',   text: 'vlan database' },
+      { cls: '',     text: ' vlan 10 name Management' },
+      { cls: '',     text: ' vlan 20 name Production' },
+      { cls: 'kw',   text: 'interface port1.0.1' },
+      { cls: '',     text: ' switchport mode trunk' },
+      { cls: '',     text: ' switchport trunk allowed vlan 10,20' },
+      { cls: 'kw',   text: 'interface vlan10' },
+      { cls: 'val',  text: ' ip address 10.0.0.1/24' },
+      { cls: 'kw',   text: 'radius-server host 10.0.1.10' },
+      { cls: 'val',  text: ' auth-port 1812' },
+      { cls: 'cmt',  text: ' key <MASKED>' },
+      { cls: 'cmd',  text: 'service ssh' },
+    ];
+
+    // ── Animate hero terminal ──
+    function animateTerminal() {
+      const leftEl  = document.getElementById('termLeft');
+      const rightEl = document.getElementById('termRight');
+      const maxLen = Math.max(HP_LINES.length, ALLIED_LINES.length);
+
+      for (let i = 0; i < maxLen; i++) {
+        // Left panel
+        if (i < HP_LINES.length) {
+          const lDiv = document.createElement('div');
+          lDiv.className = 'term-line';
+          const d = HP_LINES[i];
+          if (d.cls) {
+            const span = document.createElement('span');
+            span.className = d.cls;
+            span.textContent = d.text;
+            lDiv.appendChild(span);
+          } else {
+            lDiv.textContent = d.text;
+          }
+          leftEl.appendChild(lDiv);
+          setTimeout(() => lDiv.classList.add('visible'), 400 + i * 80);
+        }
+
+        // Right panel
+        if (i < ALLIED_LINES.length) {
+          const rDiv = document.createElement('div');
+          rDiv.className = 'term-line';
+          const d = ALLIED_LINES[i];
+          if (d.cls) {
+            const span = document.createElement('span');
+            span.className = d.cls;
+            span.textContent = d.text;
+            rDiv.appendChild(span);
+          } else {
+            rDiv.textContent = d.text;
+          }
+          rightEl.appendChild(rDiv);
+          setTimeout(() => rDiv.classList.add('visible'), 600 + i * 80);
+        }
+      }
+    }
+
+    // ── Install terminal lines ──
+    const INSTALL_LINES = [
+      { type: 'cmd',  text: '$ pip install netforge' },
+      { type: 'out',  text: '  Downloading netforge-1.0.0...' },
+      { type: 'ok',   text: '  \u2713 Done. netforge is ready.' },
+      { type: 'blank',text: '' },
+      { type: 'cmd',  text: '$ netforge switch.txt --to allied --report' },
+      { type: 'ok',   text: '  \u2713 Converted: switch-allied.txt' },
+      { type: 'tree', text: '  \u251C\u2500\u2500 Vendor:     HP Comware \u2192 AlliedWare Plus', key: 'Vendor:', val: 'HP Comware \u2192 AlliedWare Plus' },
+      { type: 'tree', text: '  \u251C\u2500\u2500 VLANs:      12', key: 'VLANs:', val: '12' },
+      { type: 'tree', text: '  \u251C\u2500\u2500 Interfaces: 48', key: 'Interfaces:', val: '48' },
+      { type: 'tree', text: '  \u2514\u2500\u2500 Warnings:   0', key: 'Warnings:', val: '0' },
+      { type: 'blank',text: '' },
+      { type: 'cmd',  text: '$ # Pipe directly from a live switch:' },
+      { type: 'cmd',  text: '$ ssh admin@sw "display current-configuration" | netforge --from hp --to allied' },
+    ];
+
+    function buildInstallTerminal() {
+      const el = document.getElementById('installTerminal');
+      INSTALL_LINES.forEach((line, idx) => {
+        const div = document.createElement('div');
+        div.className = 'tl';
+        div.setAttribute('data-idx', idx);
+
+        if (line.type === 'blank') {
+          div.innerHTML = '&nbsp;';
+        } else if (line.type === 'cmd') {
+          div.innerHTML = `<span class="prompt"></span><span class="cmd-text">${escapeHtml(line.text)}</span>`;
+        } else if (line.type === 'ok') {
+          div.innerHTML = `<span class="out-ok">${escapeHtml(line.text)}</span>`;
+        } else if (line.type === 'out') {
+          div.innerHTML = `<span class="out-dim">${escapeHtml(line.text)}</span>`;
+        } else if (line.type === 'tree') {
+          const parts = line.text.split(line.key);
+          div.innerHTML = `<span class="out-dim">${escapeHtml(parts[0])}</span><span class="out-key">${escapeHtml(line.key)}</span><span class="out-val">${escapeHtml(line.val)}</span>`;
+        }
+
+        el.appendChild(div);
+      });
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ── Intersection Observer for scroll reveals ──
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    // ── Install terminal reveal ──
+    const installObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const lines = entry.target.querySelectorAll('.tl');
+          lines.forEach((line, i) => {
+            setTimeout(() => line.classList.add('show'), i * 120);
+          });
+          installObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.2 });
+
+    // ── Copy to clipboard ──
+    function initCopy() {
+      const btn = document.getElementById('copyBtn');
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        navigator.clipboard.writeText('pip install netforge').then(() => {
+          btn.textContent = '\u2713 COPIED';
+          btn.style.color = 'var(--green)';
+          setTimeout(() => {
+            btn.textContent = 'COPY';
+            btn.style.color = '';
+          }, 2000);
+        }).catch(() => {
+          // Fallback for file:// or restricted contexts
+          const ta = document.createElement('textarea');
+          ta.value = 'pip install netforge';
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          btn.textContent = '\u2713 COPIED';
+          btn.style.color = 'var(--green)';
+          setTimeout(() => { btn.textContent = 'COPY'; btn.style.color = ''; }, 2000);
+        });
+      });
+    }
+
+    // ── Init ──
+    document.addEventListener('DOMContentLoaded', () => {
+      // Hero terminal
+      animateTerminal();
+
+      // Install terminal
+      buildInstallTerminal();
+
+      // Observe .reveal elements
+      document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+      // Observe install terminal
+      const installEl = document.getElementById('installTerminal');
+      if (installEl) installObserver.observe(installEl);
+
+      // Copy button
+      initCopy();
+    });
+  </script>
+</body>
+</html>
