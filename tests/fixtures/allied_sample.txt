@@ -1,0 +1,105 @@
+!
+! AlliedWare Plus configuration
+! Device: SW-CORE-01
+!
+
+hostname SW-CORE-01
+
+!
+! VLANs
+!
+vlan database
+ vlan 10 name Management
+ vlan 20 name Servers
+ vlan 100 name Users
+ vlan 999 name Guest
+exit
+
+!
+! SVI
+!
+interface vlan10
+ ip address 10.0.10.1/24
+exit
+
+!
+! Interfaces
+!
+interface port1.0.1
+ description Uplink-to-distribution
+ switchport mode trunk
+ switchport trunk native vlan 10
+ switchport trunk allowed vlan 10,20,100
+exit
+
+interface port1.0.5
+ description User-dot1x-port
+ switchport mode access
+ switchport access vlan 100
+ dot1x port-control auto
+ auth-mac enable
+ spanning-tree edgeport
+exit
+
+interface port1.0.24
+ description Server-access-port
+ switchport mode access
+ switchport access vlan 20
+ spanning-tree edgeport
+exit
+
+!
+! TACACS+
+!
+tacacs-server host 10.0.0.10 key 8 <ENCKEY1>
+tacacs-server host 10.0.0.11 key 8 <ENCKEY2>
+
+!
+! RADIUS
+!
+radius-server host 10.0.0.20 timeout 3 retransmit 2 key <RADKEY>
+
+!
+! AAA
+!
+aaa authentication login default group tacacs+ local
+aaa authorization commands 15 default group tacacs+ none
+aaa accounting exec default start-stop group tacacs+
+aaa authentication dot1x default group radius
+
+!
+! Services
+!
+service ssh
+ssh server v2only
+ssh server session-timeout 600 login-timeout 60
+no service telnet
+
+lldp run
+
+ntp server 10.0.0.1 prefer
+ntp server 10.0.0.2
+
+ip domain-name corp.local
+ip name-server 10.0.0.1
+
+log host 10.0.0.50
+
+snmp-server enable
+snmp-server contact NOC-Team
+snmp-server location DataCenter-Row3
+
+!
+! VTY lines
+!
+line vty 0 15
+ exec-timeout 10
+ transport input ssh
+exit
+
+!
+! Local users
+!
+username admin privilege 15 password 8 <REPLACE_PASSWORD_admin>
+
+end

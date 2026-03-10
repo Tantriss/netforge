@@ -1,0 +1,2094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Config Transpiler v2.0 - Bidirectional</title>
+    <style>
+/* ==================== RESET ==================== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; }
+body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; }
+button { border: none; background: none; cursor: pointer; font-family: inherit; }
+textarea { resize: vertical; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; }
+
+/* ==================== VARIABLES ==================== */
+:root {
+    --bg-primary: #0a0e1a;
+    --bg-secondary: #141824;
+    --bg-tertiary: #1a1f2e;
+    --bg-hover: #222837;
+    --bg-accent: #2a3142;
+    
+    --text-primary: #e8eaed;
+    --text-secondary: #9ca3af;
+    --text-muted: #6b7280;
+    --text-dim: #4b5563;
+    
+    --accent-primary: #06b6d4;
+    --accent-secondary: #0ea5e9;
+    --accent-tertiary: #3b82f6;
+    
+    --success: #10b981;
+    --success-bg: rgba(16, 185, 129, 0.1);
+    --warning: #f59e0b;
+    --warning-bg: rgba(245, 158, 11, 0.1);
+    --error: #ef4444;
+    --error-bg: rgba(239, 68, 68, 0.1);
+    --info: #06b6d4;
+    --info-bg: rgba(6, 182, 212, 0.1);
+    
+    --border-primary: rgba(75, 85, 99, 0.3);
+    --border-hover: rgba(6, 182, 212, 0.5);
+    --border-active: var(--accent-primary);
+    
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.6);
+    
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+}
+
+/* ==================== LAYOUT ==================== */
+body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding-bottom: 60px;
+}
+
+.header {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border-bottom: 1px solid var(--border-primary);
+    padding: 1.5rem 2rem;
+}
+
+.header-content {
+    max-width: 1600px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.header-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.header-meta {
+    text-align: right;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+/* ==================== MODE SWITCHER ==================== */
+.mode-switcher {
+    display: flex;
+    gap: 0.5rem;
+    background: var(--bg-tertiary);
+    padding: 0.375rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 2rem;
+    border: 1px solid var(--border-primary);
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.mode-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.mode-btn.active { background: var(--accent-primary); color: var(--bg-primary); box-shadow: var(--shadow-sm); }
+
+/* ==================== DROP ZONE ==================== */
+.drop-zone {
+    background: var(--bg-secondary);
+    border: 3px dashed var(--accent-primary);
+    border-radius: var(--radius-lg);
+    padding: 4rem 3rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-bottom: 2rem;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.drop-zone::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    background: linear-gradient(135deg, transparent 0%, rgba(6, 182, 212, 0.05) 100%);
+    border-radius: var(--radius-lg);
+    pointer-events: none;
+}
+
+.drop-zone:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-tertiary);
+    transform: translateY(-2px);
+}
+
+.drop-zone.dragover {
+    border-color: var(--accent-primary);
+    background: var(--bg-accent);
+    transform: scale(1.02);
+    box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.1);
+}
+
+.drop-zone-text {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    color: var(--text-primary);
+}
+
+.drop-zone-hint {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.drop-zone-detected {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: var(--info-bg);
+    border-radius: var(--radius-sm);
+    color: var(--accent-primary);
+    font-weight: 500;
+    display: inline-block;
+}
+
+/* ==================== SPLIT VIEW ==================== */
+.split-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.split-pane {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    min-height: 600px;
+    display: flex;
+    flex-direction: column;
+}
+
+.pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.pane-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+.pane-meta {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.config-editor {
+    flex: 1;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.config-editor:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+}
+
+/* ==================== WARNINGS INLINE ==================== */
+.warning-inline {
+    background: var(--warning-bg);
+    border-left: 3px solid var(--warning);
+    padding: 0.5rem 0.75rem;
+    margin: 0.5rem 0;
+    font-size: 0.8125rem;
+    color: var(--warning);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* ==================== CHECKLIST ==================== */
+.checklist-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.checklist-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.checklist-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.checklist-badge {
+    background: var(--warning-bg);
+    color: var(--warning);
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.checklist-category {
+    margin-bottom: 1.5rem;
+}
+
+.category-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.75rem;
+    transition: all 0.2s;
+}
+
+.category-header:hover { background: var(--bg-hover); }
+
+.category-icon {
+    font-size: 1.25rem;
+}
+
+.category-title {
+    flex: 1;
+    font-weight: 600;
+}
+
+.category-count {
+    background: var(--bg-accent);
+    color: var(--text-secondary);
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
+}
+
+.category-items {
+    padding-left: 1rem;
+}
+
+.checklist-item {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.item-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.item-checkbox {
+    margin-top: 0.125rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    accent-color: var(--success);
+    cursor: pointer;
+}
+
+.item-title {
+    flex: 1;
+    font-weight: 500;
+}
+
+.item-details {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin-top: 0.5rem;
+    padding-left: 2rem;
+}
+
+.item-location {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bg-hover);
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+/* ==================== BATCH MODE ==================== */
+.batch-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    min-height: 400px;
+}
+
+#batchMode {
+    min-height: 300px;
+}
+
+.batch-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.batch-progress {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.batch-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-tertiary));
+    transition: width 0.3s;
+    border-radius: var(--radius-sm);
+}
+
+.batch-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.batch-table th {
+    text-align: left;
+    padding: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.875rem;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.batch-table td {
+    padding: 1rem 0.75rem;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.batch-table tr:hover {
+    background: var(--bg-tertiary);
+}
+
+.batch-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.status-icon {
+    font-size: 1.125rem;
+}
+
+.warning-count {
+    background: var(--warning-bg);
+    color: var(--warning);
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* ==================== BUTTONS ==================== */
+.btn {
+    padding: 0.625rem 1.25rem;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    color: var(--bg-primary);
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--bg-hover);
+    border-color: var(--border-hover);
+}
+
+.btn-group {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* ==================== ACTIONS BAR ==================== */
+.actions-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-primary);
+}
+
+/* ==================== STATUS BAR ==================== */
+.status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 1rem 2rem;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-primary);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 200;
+}
+
+.status-bar.show { transform: translateY(0); }
+
+.status-icon { font-size: 1.25rem; }
+.status-message { flex: 1; font-weight: 500; }
+
+.status-bar.success { background: var(--success-bg); color: var(--success); border-color: var(--success); }
+.status-bar.warning { background: var(--warning-bg); color: var(--warning); border-color: var(--warning); }
+.status-bar.error { background: var(--error-bg); color: var(--error); border-color: var(--error); }
+.status-bar.info { background: var(--info-bg); color: var(--info); border-color: var(--info); }
+
+/* ==================== KEY MANAGER ==================== */
+.key-manager {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.key-manager-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.key-manager-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+.key-section {
+    margin-bottom: 1.5rem;
+}
+
+.key-section-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+    letter-spacing: 0.05em;
+}
+
+.key-input-group {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.key-label {
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.key-input {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-family: 'JetBrains Mono', monospace;
+    transition: all 0.2s;
+}
+
+.key-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+}
+
+.key-input::placeholder {
+    color: var(--text-dim);
+}
+
+/* ==================== UTILITIES ==================== */
+.hidden { display: none !important; }
+.text-center { text-align: center; }
+.mt-1 { margin-top: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+
+/* ==================== MODAL ==================== */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    max-width: 90%;
+    max-height: 90%;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-lg);
+}
+
+.modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-primary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+.modal-close {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    color: var(--text-primary);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+}
+
+.modal-close:hover {
+    background: var(--bg-hover);
+}
+
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-config {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+@media (max-width: 1200px) {
+    .split-container {
+        grid-template-columns: 1fr;
+    }
+}
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div>
+                <h1>Network Configuration Transpiler</h1>
+            </div>
+            <div class="header-meta">
+                v2.0 BIDIRECTIONAL<br>
+                MDL BEAUJEAN Tristan | 2026
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Mode Switcher -->
+        <div class="mode-switcher">
+            <button class="mode-btn active" data-mode="single">Single File</button>
+            <button class="mode-btn" data-mode="batch">Batch Processing</button>
+        </div>
+
+        <!-- Single File Mode -->
+        <div id="singleMode">
+            <!-- Drop Zone -->
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-zone-text">Drop configuration file here</div>
+                <div class="drop-zone-hint">Supports .cfg, .txt, .conf | Auto-detects HP or Allied</div>
+                <div class="drop-zone-detected hidden" id="detectedVendor"></div>
+            </div>
+            <input type="file" id="fileInput" accept=".cfg,.txt,.conf" style="display: none;">
+
+            <!-- Split View -->
+            <div class="split-container">
+                <!-- Source Pane -->
+                <div class="split-pane">
+                    <div class="pane-header">
+                        <div>
+                            <div class="pane-title">Source Configuration</div>
+                            <div class="pane-meta" id="sourceMeta">No file loaded</div>
+                        </div>
+                    </div>
+                    <textarea id="sourceConfig" class="config-editor" placeholder="Paste or drop your configuration here..."></textarea>
+                    <div class="actions-bar">
+                        <div class="btn-group">
+                            <button class="btn btn-primary" id="btnConvert">Convert</button>
+                            <button class="btn btn-secondary" id="btnLoadSample">Load Sample</button>
+                            <button class="btn btn-secondary" id="btnClear">Clear</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Target Pane -->
+                <div class="split-pane">
+                    <div class="pane-header">
+                        <div>
+                            <div class="pane-title">Target Configuration</div>
+                            <div class="pane-meta" id="targetMeta">Waiting for conversion...</div>
+                        </div>
+                    </div>
+                    <textarea id="targetConfig" class="config-editor" readonly placeholder="Converted configuration will appear here..."></textarea>
+                    <div class="actions-bar">
+                        <div class="btn-group">
+                            <button class="btn btn-primary" id="btnReverse" disabled>Reverse</button>
+                            <button class="btn btn-secondary" id="btnDownload" disabled>Download</button>
+                            <button class="btn btn-secondary" id="btnCopy" disabled>Copy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Manager -->
+            <div class="key-manager hidden" id="keyManager">
+                <div class="key-manager-header">
+                    <div class="key-manager-title">Security Credentials Manager</div>
+                    <button class="btn btn-primary" id="btnApplyKeys">Apply to Configuration</button>
+                </div>
+                <div id="keyManagerContent"></div>
+            </div>
+        </div>
+
+        <!-- Batch Mode -->
+        <div id="batchMode" class="hidden">
+            <!-- Batch Drop Zone -->
+            <div class="drop-zone" id="batchDropZone">
+                <div class="drop-zone-text">Drop multiple files or ZIP archive</div>
+                <div class="drop-zone-hint">Supports .cfg, .txt, .conf files | Auto-converts all</div>
+            </div>
+            <input type="file" id="batchFileInput" accept=".cfg,.txt,.conf,.zip" multiple style="display: none;">
+
+            <!-- Batch Container -->
+            <div class="batch-container hidden" id="batchContainer">
+                <div class="batch-header">
+                    <div>
+                        <h2>Batch Conversion</h2>
+                        <div class="pane-meta" id="batchStats">0 files</div>
+                    </div>
+                </div>
+                <div class="batch-progress">
+                    <div class="batch-progress-bar" id="batchProgressBar" style="width: 0%"></div>
+                </div>
+                <table class="batch-table">
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Status</th>
+                            <th>Warnings</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="batchTableBody"></tbody>
+                </table>
+                <div class="actions-bar">
+                    <div class="btn-group">
+                        <button class="btn btn-primary" id="btnDownloadAllZip">Download All (ZIP)</button>
+                        <button class="btn btn-secondary" id="btnBatchReport">Generate Report</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Batch Key Manager -->
+            <div class="key-manager hidden" id="batchKeyManager">
+                <div class="key-manager-header">
+                    <div class="key-manager-title">Security Credentials Manager</div>
+                    <button class="btn btn-primary" id="btnApplyBatchKeys">Apply to All Files</button>
+                </div>
+                <div id="batchKeyManagerContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="statusBar" class="status-bar">
+        <span class="status-icon"></span>
+        <span class="status-message"></span>
+    </div>
+
+    <!-- Modal for Batch View -->
+    <div id="batchModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle">Configuration</div>
+                <button class="modal-close" onclick="closeBatchModal()">Close</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-config" id="modalConfig"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+'use strict';
+
+// ==================== UNIVERSAL CONFIG MODEL ====================
+class UniversalConfig {
+    constructor() {
+        this.metadata = { source_vendor: null, target_vendor: null, parsed_at: null, version: '2.0.0' };
+        this.global = { hostname: null, clock: null };
+        this.vlans = [];
+        this.interfaces = [];
+        this.svis = [];
+        this.routing = { static_routes: [] };
+        this.aaa = {
+            radius_schemes: [],
+            tacacs_schemes: [],
+            domains: []
+        };
+        this.dot1x_global = { enabled: false, auth_method: null, timers: {} };
+        this.mac_auth_global = { domain: null, timers: {} };
+        this.port_security_global = { enabled: false };
+        this.services = {
+            ntp: { enabled: false, servers: [], source_interface: null },
+            dns: { servers: [], domain: null },
+            syslog: { hosts: [], source_interface: null },
+            snmp: { enabled: false, contact: null, location: null, version: null, engineid: null },
+            ssh: { enabled: false },
+            lldp: { enabled: false }
+        };
+        this.vty_lines = [];
+        this.local_users = [];
+        this.warnings = [];
+        this.checklist = [];
+    }
+    
+    addWarning(category, message, details = {}) {
+        this.warnings.push({ category, message, ...details });
+    }
+    
+    addChecklistItem(category, title, details, location = null) {
+        this.checklist.push({ category, title, details, location, done: false });
+    }
+    
+    toJSON() { return JSON.stringify(this, null, 2); }
+}
+
+// ==================== VENDOR DETECTOR ====================
+class VendorDetector {
+    static detect(config) {
+        const lines = config.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#') && !l.startsWith('!'));
+        
+        const hpPatterns = [
+            /^sysname\s+/, /^interface\s+(GigabitEthernet|Ten-GigabitEthernet)/, /^port\s+(access|link-type|trunk)/,
+            /^dot1x$/, /^mac-authentication$/, /^hwtacacs\s+scheme/, /^radius\s+scheme/, /^info-center/,
+            /^undo\s+/, /^Vlan-interface\d+$/, /^ntp-service\s+unicast-server/
+        ];
+        
+        const alliedPatterns = [
+            /^hostname\s+/, /^interface\s+port\d+\.\d+\.\d+/, /^switchport\s+(mode|access)/,
+            /^auth-mac\s+enable/, /^dot1x\s+port-control/, /^spanning-tree\s+edgeport/,
+            /^vlan\s+database/, /^radius-server\s+host/, /^tacacs-server\s+host/,
+            /^log\s+host/, /^snmp-server/, /^ntp\s+server/
+        ];
+        
+        let hpScore = 0, alliedScore = 0;
+        
+        for (const line of lines) {
+            if (hpPatterns.some(p => p.test(line))) hpScore++;
+            if (alliedPatterns.some(p => p.test(line))) alliedScore++;
+        }
+        
+        const total = hpScore + alliedScore;
+        const maxScore = Math.max(hpScore, alliedScore);
+        const vendor = hpScore > alliedScore ? 'hp' : alliedScore > hpScore ? 'allied' : 'unknown';
+        const confidence = total > 0 ? Math.round((maxScore / total) * 100) : 0;
+        
+        return { vendor, confidence, scores: { hp: hpScore, allied: alliedScore } };
+    }
+    
+    static getVendorName(vendor) {
+        return { hp: 'HP Comware', allied: 'AlliedWare Plus', unknown: 'Unknown' }[vendor] || 'Unknown';
+    }
+}
+
+// ==================== HP PARSER ====================
+class HPParser {
+    parse(config) {
+        const model = new UniversalConfig();
+        model.metadata.source_vendor = 'hp';
+        model.metadata.parsed_at = new Date().toISOString();
+        
+        const lines = config.split('\n');
+        let ctx = null, obj = null;
+        
+        for (const line of lines) {
+            const t = line.trim();
+            if (!t || t.startsWith('#') || t === 'return' || t === 'quit') continue;
+            
+            const indent = (line.match(/^(\s*)/) || ['', ''])[1].length;
+            
+            if (indent === 0) {
+                this.saveContext(model, ctx, obj);
+                ctx = null; obj = null;
+                
+                // Global
+                if (t.startsWith('sysname ')) model.global.hostname = t.substring(8).trim();
+                else if (t.match(/^clock timezone (.+)/)) model.global.clock = t.substring(14).trim();
+                
+                // VLANs
+                else if (t.match(/^vlan\s+(\d+)$/)) { ctx = 'VLAN'; obj = { id: parseInt(t.split(/\s+/)[1]), name: null }; }
+                
+                // Interfaces
+                else if (t.startsWith('interface ')) {
+                    const name = t.substring(10).trim();
+                    if (name.startsWith('Vlan-interface')) { ctx = 'SVI'; obj = { name, ip: null, mask: null }; }
+                    else { ctx = 'INTERFACE'; obj = { name, type: 'physical', description: null, mode: null, access_vlan: null, trunk_native: null, trunk_allowed: null, dot1x: false, dot1x_max: null, mac_auth: false, mac_auth_max: null, guest_vlan: null, stp_edge: false, broadcast_suppression: null, port_security: null }; }
+                }
+                
+                // AAA
+                else if (t.startsWith('radius scheme ')) { ctx = 'RADIUS'; obj = { name: t.substring(14).trim(), primary_auth: null, primary_acct: null, secondary_auth: [], secondary_acct: [], key_auth: null, key_acct: null, nas_ip: null, timeout: null, retransmit: null }; }
+                else if (t.startsWith('hwtacacs scheme ')) { ctx = 'TACACS'; obj = { name: t.substring(16).trim(), primary_auth: null, primary_author: null, primary_acct: null, secondary_auth: null, secondary_author: null, secondary_acct: null, key_auth: null, key_author: null, key_acct: null, nas_ip: null, timeout: null }; }
+                else if (t.startsWith('domain ')) { ctx = 'DOMAIN'; obj = { name: t.substring(7).trim(), auth_login: [], author_login: [], acct_login: [], auth_lan: [], author_lan: [], acct_lan: [], auth_enable: [], author_enable: [] }; }
+                
+                // Services
+                else if (t.match(/^ip route-static\s+(\S+)\s+(\S+)\s+(\S+)/)) {
+                    const m = t.match(/^ip route-static\s+(\S+)\s+(\S+)\s+(\S+)/);
+                    model.routing.static_routes.push({ dest: m[1], mask: m[2], gateway: m[3] });
+                }
+                else if (t.match(/^ntp-service unicast-server\s+(\S+)/)) {
+                    const ip = t.split(/\s+/)[2];
+                    model.services.ntp.servers.push({ ip, prefer: t.includes('priority') });
+                    model.services.ntp.enabled = true;
+                }
+                else if (t.startsWith('dns server ')) model.services.dns.servers.push(t.substring(11).trim());
+                else if (t.startsWith('dns domain ')) model.services.dns.domain = t.substring(11).trim();
+                else if (t.startsWith('info-center loghost ')) model.services.syslog.hosts.push(t.split(/\s+/)[2]);
+                else if (t === 'ssh server enable') model.services.ssh.enabled = true;
+                else if (t === 'lldp global enable') model.services.lldp.enabled = true;
+                else if (t === 'snmp-agent') model.services.snmp.enabled = true;
+                
+                // Global configs
+                else if (t.startsWith('dot1x ')) {
+                    model.dot1x_global.enabled = true;
+                    if (t.match(/authentication-method\s+(\w+)/)) model.dot1x_global.auth_method = t.match(/authentication-method\s+(\w+)/)[1];
+                    else if (t.match(/timer quiet-period\s+(\d+)/)) model.dot1x_global.timers.quiet = parseInt(t.match(/timer quiet-period\s+(\d+)/)[1]);
+                    else if (t.match(/timer reauth-period\s+(\d+)/)) model.dot1x_global.timers.reauth = parseInt(t.match(/timer reauth-period\s+(\d+)/)[1]);
+                }
+                else if (t.startsWith('mac-authentication ')) {
+                    if (t.match(/domain\s+(\w+)/)) model.mac_auth_global.domain = t.match(/domain\s+(\w+)/)[1];
+                    else if (t.match(/timer offline-detect\s+(\d+)/)) model.mac_auth_global.timers.offline = parseInt(t.match(/timer offline-detect\s+(\d+)/)[1]);
+                    else if (t.match(/timer quiet\s+(\d+)/)) model.mac_auth_global.timers.quiet = parseInt(t.match(/timer quiet\s+(\d+)/)[1]);
+                }
+                else if (t === 'port-security enable') model.port_security_global.enabled = true;
+                
+                // VTY & Users
+                else if (t.match(/^line vty\s+(\d+)\s+(\d+)/)) { ctx = 'VTY'; const m = t.match(/^line vty\s+(\d+)\s+(\d+)/); obj = { start: parseInt(m[1]), end: parseInt(m[2]), auth_mode: null, role: null, idle_timeout: null, protocol: null }; }
+                else if (t.match(/^local-user\s+(\S+)/)) { ctx = 'USER'; obj = { name: t.split(/\s+/)[1], class: null, password_hash: null, service_type: null, role: null }; }
+            } else {
+                // Context-specific parsing
+                if (ctx === 'VLAN' && obj && t.startsWith('name ')) obj.name = t.substring(5).trim();
+                else if (ctx === 'SVI' && obj && t.match(/ip address\s+(\S+)\s+(\S+)/)) {
+                    const m = t.match(/ip address\s+(\S+)\s+(\S+)/);
+                    obj.ip = m[1]; obj.mask = m[2];
+                }
+                else if (ctx === 'INTERFACE' && obj) {
+                    if (t.startsWith('description ')) obj.description = t.substring(12).trim();
+                    else if (t.match(/port access vlan\s+(\d+)/)) { obj.mode = 'access'; obj.access_vlan = parseInt(t.match(/port access vlan\s+(\d+)/)[1]); }
+                    else if (t.includes('port link-type trunk')) obj.mode = 'trunk';
+                    else if (t.match(/port trunk pvid vlan\s+(\d+)/)) obj.trunk_native = parseInt(t.match(/port trunk pvid vlan\s+(\d+)/)[1]);
+                    else if (t.match(/port trunk permit vlan\s+(.+)/)) obj.trunk_allowed = t.match(/port trunk permit vlan\s+(.+)/)[1].trim();
+                    else if (t === 'dot1x' || t.startsWith('dot1x ')) obj.dot1x = true;
+                    else if (t.match(/dot1x max-user\s+(\d+)/)) obj.dot1x_max = parseInt(t.match(/dot1x max-user\s+(\d+)/)[1]);
+                    else if (t.match(/dot1x guest-vlan\s+(\d+)/)) obj.guest_vlan = parseInt(t.match(/dot1x guest-vlan\s+(\d+)/)[1]);
+                    else if (t === 'mac-authentication' || t.startsWith('mac-authentication ')) obj.mac_auth = true;
+                    else if (t.match(/mac-authentication max-user\s+(\d+)/)) obj.mac_auth_max = parseInt(t.match(/mac-authentication max-user\s+(\d+)/)[1]);
+                    else if (t.match(/mac-authentication guest-vlan\s+(\d+)/)) obj.guest_vlan = parseInt(t.match(/mac-authentication guest-vlan\s+(\d+)/)[1]);
+                    else if (t.includes('stp edged-port')) obj.stp_edge = true;
+                    else if (t.match(/broadcast-suppression kbps\s+(\d+)/)) obj.broadcast_suppression = parseInt(t.match(/broadcast-suppression kbps\s+(\d+)/)[1]);
+                    else if (t.startsWith('port-security ')) obj.port_security = t;
+                }
+                else if (ctx === 'RADIUS' && obj) {
+                    if (t.startsWith('primary authentication ')) obj.primary_auth = t.split(/\s+/)[2];
+                    else if (t.startsWith('primary accounting ')) obj.primary_acct = t.split(/\s+/)[2];
+                    else if (t.startsWith('secondary authentication ')) obj.secondary_auth.push(t.split(/\s+/)[2]);
+                    else if (t.startsWith('secondary accounting ')) obj.secondary_acct.push(t.split(/\s+/)[2]);
+                    else if (t.includes('key authentication')) obj.key_auth = t.includes('cipher') ? 'ENCRYPTED' : null;
+                    else if (t.includes('key accounting')) obj.key_acct = t.includes('cipher') ? 'ENCRYPTED' : null;
+                    else if (t.startsWith('nas-ip ')) obj.nas_ip = t.split(/\s+/)[1];
+                    else if (t.match(/timer response-timeout\s+(\d+)/)) obj.timeout = parseInt(t.match(/timer response-timeout\s+(\d+)/)[1]);
+                    else if (t.match(/retry\s+(\d+)/)) obj.retransmit = parseInt(t.match(/retry\s+(\d+)/)[1]);
+                }
+                else if (ctx === 'TACACS' && obj) {
+                    if (t.startsWith('primary authentication ')) obj.primary_auth = t.split(/\s+/)[2];
+                    else if (t.startsWith('primary authorization ')) obj.primary_author = t.split(/\s+/)[2];
+                    else if (t.startsWith('primary accounting ')) obj.primary_acct = t.split(/\s+/)[2];
+                    else if (t.startsWith('secondary authentication ')) obj.secondary_auth = t.split(/\s+/)[2];
+                    else if (t.startsWith('secondary authorization ')) obj.secondary_author = t.split(/\s+/)[2];
+                    else if (t.startsWith('secondary accounting ')) obj.secondary_acct = t.split(/\s+/)[2];
+                    else if (t.includes('key authentication')) obj.key_auth = 'ENCRYPTED';
+                    else if (t.includes('key authorization')) obj.key_author = 'ENCRYPTED';
+                    else if (t.includes('key accounting')) obj.key_acct = 'ENCRYPTED';
+                    else if (t.startsWith('nas-ip ')) obj.nas_ip = t.split(/\s+/)[1];
+                }
+                else if (ctx === 'DOMAIN' && obj) {
+                    if (t.startsWith('authentication login ')) obj.auth_login.push(t.substring(21).trim());
+                    else if (t.startsWith('authorization login ')) obj.author_login.push(t.substring(20).trim());
+                    else if (t.startsWith('accounting login ')) obj.acct_login.push(t.substring(17).trim());
+                    else if (t.startsWith('authentication lan-access ')) obj.auth_lan.push(t.substring(26).trim());
+                    else if (t.startsWith('authorization lan-access ')) obj.author_lan.push(t.substring(25).trim());
+                    else if (t.startsWith('accounting lan-access ')) obj.acct_lan.push(t.substring(22).trim());
+                    else if (t.startsWith('authentication enable ')) obj.auth_enable.push(t.substring(22).trim());
+                    else if (t.startsWith('authorization enable ')) obj.author_enable.push(t.substring(21).trim());
+                }
+                else if (ctx === 'VTY' && obj) {
+                    if (t.match(/authentication-mode\s+(\w+)/)) obj.auth_mode = t.match(/authentication-mode\s+(\w+)/)[1];
+                    else if (t.match(/user-role\s+(\S+)/)) obj.role = t.match(/user-role\s+(\S+)/)[1];
+                    else if (t.match(/idle-timeout\s+(\d+)/)) obj.idle_timeout = parseInt(t.match(/idle-timeout\s+(\d+)/)[1]);
+                    else if (t.includes('protocol inbound ssh')) obj.protocol = 'ssh';
+                }
+                else if (ctx === 'USER' && obj) {
+                    if (t.match(/class\s+(\w+)/)) obj.class = t.match(/class\s+(\w+)/)[1];
+                    else if (t.includes('password hash')) obj.password_hash = 'ENCRYPTED';
+                    else if (t.match(/service-type\s+(\w+)/)) obj.service_type = t.match(/service-type\s+(\w+)/)[1];
+                    else if (t.match(/user-role\s+(\S+)/)) obj.role = t.match(/user-role\s+(\S+)/)[1];
+                }
+                else if (t.match(/info-center loghost source\s+(.+)/)) model.services.syslog.source_interface = t.match(/info-center loghost source\s+(.+)/)[1].trim();
+                else if (t.match(/ntp-service source\s+(.+)/)) model.services.ntp.source_interface = t.match(/ntp-service source\s+(.+)/)[1].trim();
+                else if (t.match(/snmp-agent sys-info contact\s+(.+)/)) model.services.snmp.contact = t.match(/snmp-agent sys-info contact\s+(.+)/)[1].trim();
+                else if (t.match(/snmp-agent sys-info location\s+(.+)/)) model.services.snmp.location = t.match(/snmp-agent sys-info location\s+(.+)/)[1].trim();
+                else if (t.match(/snmp-agent sys-info version\s+(\w+)/)) model.services.snmp.version = t.match(/snmp-agent sys-info version\s+(\w+)/)[1];
+            }
+        }
+        
+        this.saveContext(model, ctx, obj);
+        return model;
+    }
+    
+    saveContext(model, ctx, obj) {
+        if (!ctx || !obj) return;
+        if (ctx === 'VLAN') model.vlans.push(obj);
+        else if (ctx === 'SVI') model.svis.push(obj);
+        else if (ctx === 'INTERFACE') model.interfaces.push(obj);
+        else if (ctx === 'RADIUS') model.aaa.radius_schemes.push(obj);
+        else if (ctx === 'TACACS') model.aaa.tacacs_schemes.push(obj);
+        else if (ctx === 'DOMAIN') model.aaa.domains.push(obj);
+        else if (ctx === 'VTY') model.vty_lines.push(obj);
+        else if (ctx === 'USER') model.local_users.push(obj);
+    }
+}
+
+// ==================== ALLIED PARSER (simplifié pour l'instant, sera complété) ====================
+class AlliedParser {
+    parse(config) {
+        const model = new UniversalConfig();
+        model.metadata.source_vendor = 'allied';
+        model.metadata.parsed_at = new Date().toISOString();
+        
+        // Parser Allied sera ajouté progressivement
+        // Pour l'instant, structure de base
+        
+        return model;
+    }
+}
+
+// ==================== ALLIED RENDERER ====================
+class AlliedRenderer {
+    render(model) {
+        const lines = [];
+        
+        lines.push('!', '! AlliedWare Plus Configuration', `! Generated from ${VendorDetector.getVendorName(model.metadata.source_vendor)}`, `! Original hostname: ${model.global.hostname || 'N/A'}`, `! Date: ${new Date().toISOString()}`, '!', '');
+        
+        if (model.global.hostname) { lines.push(`hostname ${model.global.hostname}`, ''); }
+        if (model.services.ssh.enabled) { 
+            lines.push('ssh server v2only');
+            lines.push('ssh server session-timeout 600 login-timeout 600');
+            lines.push('ssh server allow-users *');
+            lines.push('service ssh'); 
+            lines.push('no service telnet', ''); 
+        }
+        
+        // TACACS
+        if (model.aaa.tacacs_schemes.length > 0) {
+            lines.push('!', '! TACACS+ Configuration', '!');
+            for (const t of model.aaa.tacacs_schemes) {
+                if (t.primary_auth) {
+                    lines.push(`tacacs-server host ${t.primary_auth} key 8 <REPLACE_KEY_${t.primary_auth.replace(/\./g, '_')}>`);
+                    lines.push(`! HP key was encrypted - manual replacement required`);
+                }
+                if (t.secondary_auth && t.secondary_auth !== t.primary_auth) {
+                    lines.push(`tacacs-server host ${t.secondary_auth} key 8 <REPLACE_KEY_${t.secondary_auth.replace(/\./g, '_')}>`);
+                }
+            }
+            lines.push('');
+        }
+        
+        // RADIUS
+        if (model.aaa.radius_schemes.length > 0) {
+            lines.push('!', '! RADIUS Configuration', '!');
+            for (const r of model.aaa.radius_schemes) {
+                if (r.primary_auth) {
+                    const timeout = r.timeout || 1;
+                    const retransmit = r.retransmit || 1;
+                    lines.push(`radius-server host ${r.primary_auth} timeout ${timeout} retransmit ${retransmit} key <REPLACE_KEY_${r.primary_auth.replace(/\./g, '_')}>`);
+                    lines.push(`! HP key was encrypted - manual replacement required`);
+                }
+                for (const sec of r.secondary_auth) {
+                    if (sec !== r.primary_auth) {
+                        const timeout = r.timeout || 1;
+                        const retransmit = r.retransmit || 1;
+                        lines.push(`radius-server host ${sec} timeout ${timeout} retransmit ${retransmit} key <REPLACE_KEY_${sec.replace(/\./g, '_')}>`);
+                    }
+                }
+            }
+            lines.push('');
+        }
+        
+        // AAA
+        if (model.aaa.domains.length > 0) {
+            lines.push('!', '! AAA Configuration', '!');
+            for (const d of model.aaa.domains) {
+                lines.push(`! Domain: ${d.name}`);
+                
+                // Authentication
+                if (d.auth_enable.length > 0) {
+                    const methods = d.auth_enable.map(m => m.includes('hwtacacs') ? 'group tacacs+' : m.includes('radius') ? 'group radius' : m).join(' ');
+                    lines.push(`aaa authentication enable default ${methods} none`);
+                }
+                if (d.auth_login.length > 0) {
+                    const methods = d.auth_login.map(m => m.includes('hwtacacs') ? 'group tacacs+' : m.includes('radius') ? 'group radius' : m).join(' ');
+                    lines.push(`aaa authentication login default ${methods}`);
+                }
+                lines.push(`aaa authentication login console local`);
+                if (d.auth_lan.length > 0) {
+                    const methods = d.auth_lan.map(m => m.includes('radius') ? 'group radius' : m).join(' ');
+                    lines.push(`aaa authentication dot1x default ${methods}`);
+                    lines.push(`aaa authentication auth-mac default ${methods}`);
+                }
+                
+                // Authorization
+                if (d.author_login.length > 0 || d.author_enable.length > 0) {
+                    lines.push(`aaa authorization commands 1 default group tacacs+ none`);
+                    lines.push(`aaa authorization commands 7 default group tacacs+ none`);
+                    lines.push(`aaa authorization commands 15 default group tacacs+ none`);
+                }
+                
+                // Accounting
+                if (d.acct_login.length > 0) {
+                    lines.push(`aaa accounting login default start-stop group tacacs+`);
+                }
+            }
+            lines.push('');
+        }
+        
+        // VLANs
+        if (model.vlans.length > 0) {
+            lines.push('!', '! VLANs', '!', 'vlan database');
+            for (const v of model.vlans) {
+                const name = (v.name || `vlan${v.id}`).toLowerCase().replace(/[\s\-&:*"]+/g, '_').substring(0, 32);
+                lines.push(` vlan ${v.id} name ${name}`);
+            }
+            lines.push('exit', '');
+        }
+        
+        // SVIs
+        if (model.svis.length > 0) {
+            lines.push('!', '! VLAN Interfaces (Management)', '!');
+            for (const svi of model.svis) {
+                const match = svi.name.match(/Vlan-interface(\d+)/);
+                if (match && svi.ip && svi.mask) {
+                    const vlanNum = match[1];
+                    const prefix = this.maskToPrefix(svi.mask);
+                    lines.push(`interface vlan${vlanNum}`, ` ip address ${svi.ip}/${prefix}`, 'exit', '');
+                    
+                    // Add source-interface commands if this is management VLAN
+                    if (model.aaa.radius_schemes.length > 0 || model.aaa.tacacs_schemes.length > 0) {
+                        lines.push(`!`, `! Source Interface for AAA`, `!`);
+                        if (model.aaa.radius_schemes.length > 0) lines.push(`ip radius source-interface ${svi.ip}`);
+                        if (model.aaa.tacacs_schemes.length > 0) lines.push(`ip tacacs source-interface ${svi.ip}`);
+                        lines.push('');
+                    }
+                }
+            }
+        }
+        
+        // Interfaces
+        if (model.interfaces.length > 0) {
+            lines.push('!', '! Interfaces', '!');
+            for (const iface of model.interfaces) {
+                const name = this.convertInterfaceName(iface.name);
+                lines.push(`interface ${name}`);
+                
+                if (iface.description) lines.push(` description ${iface.description}`);
+                
+                if (iface.mode === 'access') {
+                    lines.push(' switchport mode access');
+                    if (iface.access_vlan) lines.push(` switchport access vlan ${iface.access_vlan}`);
+                } else if (iface.mode === 'trunk') {
+                    lines.push(' switchport mode trunk');
+                    if (iface.trunk_native) lines.push(` switchport trunk native vlan ${iface.trunk_native}`);
+                    if (iface.trunk_allowed) lines.push(` switchport trunk allowed vlan ${iface.trunk_allowed}`);
+                }
+                
+                if (iface.dot1x) lines.push(' dot1x port-control auto');
+                if (iface.mac_auth) lines.push(' auth-mac enable');
+                if (iface.guest_vlan) lines.push(` auth-mac guest-vlan ${iface.guest_vlan}`);
+                if (iface.stp_edge) lines.push(' spanning-tree edgeport');
+                if (iface.broadcast_suppression) lines.push(` storm-control broadcast level ${iface.broadcast_suppression}`);
+                if (iface.port_security) {
+                    lines.push(' switchport port-security');
+                    lines.push(` ! HP: ${iface.port_security} - Verify Allied equivalent`);
+                }
+                
+                lines.push('exit', '');
+            }
+        }
+        
+        // Routes
+        if (model.routing.static_routes.length > 0) {
+            lines.push('!', '! Static Routes', '!');
+            for (const r of model.routing.static_routes) {
+                const prefix = this.maskToPrefix(r.mask);
+                lines.push(`ip route ${r.dest}/${prefix} ${r.gateway}`);
+            }
+            lines.push('');
+        }
+        
+        // NTP
+        if (model.services.ntp.servers.length > 0) {
+            lines.push('!', '! NTP', '!');
+            for (const srv of model.services.ntp.servers) {
+                lines.push(`ntp server ${srv.ip}${srv.prefer ? ' prefer' : ''}`);
+            }
+            lines.push('');
+        }
+        
+        // DNS
+        if (model.services.dns.servers.length > 0 || model.services.dns.domain) {
+            lines.push('!', '! DNS', '!');
+            if (model.services.dns.domain) lines.push(`ip domain-name ${model.services.dns.domain}`);
+            for (const srv of model.services.dns.servers) lines.push(`ip name-server ${srv}`);
+            if (model.services.dns.servers.length > 0) lines.push('ip domain-lookup');
+            lines.push('');
+        }
+        
+        // Syslog
+        if (model.services.syslog.hosts.length > 0) {
+            lines.push('!', '! Syslog', '!');
+            for (const host of model.services.syslog.hosts) {
+                lines.push(`log host ${host}`);
+                lines.push(`log host ${host} level notices`);
+            }
+            if (model.services.syslog.source_interface) {
+                const sviMatch = model.services.syslog.source_interface.match(/Vlan-interface(\d+)/);
+                if (sviMatch) {
+                    const svi = model.svis.find(s => s.name === model.services.syslog.source_interface);
+                    if (svi && svi.ip) {
+                        lines.push(`log host source ${svi.ip}`);
+                    }
+                }
+            }
+            lines.push('');
+        }
+        
+        // SNMP
+        if (model.services.snmp.enabled) {
+            lines.push('!', '! SNMP', '!');
+            if (model.services.snmp.contact) lines.push(`snmp-server contact ${model.services.snmp.contact}`);
+            if (model.services.snmp.location) lines.push(`snmp-server location ${model.services.snmp.location}`);
+            lines.push('snmp-server enable', '');
+        }
+        
+        // LLDP
+        if (model.services.lldp.enabled) {
+            lines.push('!', '! LLDP', '!', 'lldp run', '');
+        }
+        
+        // VTY Lines
+        if (model.vty_lines.length > 0) {
+            lines.push('!', '! VTY Lines', '!');
+            for (const vty of model.vty_lines) {
+                const alliedEnd = Math.min(vty.end, 15); // Allied typically 0-15
+                lines.push(`line vty ${vty.start} ${alliedEnd}`);
+                if (vty.idle_timeout) lines.push(` exec-timeout ${vty.idle_timeout}`);
+                if (vty.protocol === 'ssh') lines.push(' transport input ssh');
+                if (vty.role) lines.push(` ! Map HP role "${vty.role}" to privilege level (typically 15)`);
+                lines.push('exit', '');
+            }
+        }
+        
+        // Local Users
+        if (model.local_users.length > 0) {
+            lines.push('!', '! Local Users', '!');
+            for (const user of model.local_users) {
+                lines.push(`username ${user.name} privilege 15 password 8 <REPLACE_PASSWORD_${user.name}>`);
+                lines.push(`! HP password hash is incompatible - set new password`);
+            }
+            lines.push('');
+        }
+        
+        // Clock
+        if (model.global.clock) {
+            lines.push('!', '! Clock/Timezone', '!');
+            const tzMatch = model.global.clock.match(/GMT([+-]\d+)/);
+            if (tzMatch) {
+                const offset = tzMatch[1];
+                const hours = Math.abs(parseInt(offset));
+                lines.push(`clock timezone CET ${offset.startsWith('-') ? 'minus' : 'plus'} ${hours}:00`);
+            }
+            lines.push('clock summer-time CET recurring 5 Sun Mar 02:00 5 Sun Oct 03:00 60', '');
+        }
+        
+        lines.push('end');
+        return lines.join('\n');
+    }
+    
+    convertInterfaceName(hpName) {
+        const match = hpName.match(/GigabitEthernet(\d+)\/(\d+)\/(\d+)/);
+        if (match) return `port${match[1]}.${match[2]}.${match[3]}`;
+        const vlanMatch = hpName.match(/Vlan-interface(\d+)/);
+        if (vlanMatch) return `vlan${vlanMatch[1]}`;
+        return hpName;
+    }
+    
+    maskToPrefix(mask) {
+        return mask.split('.').reduce((acc, octet) => acc + (parseInt(octet).toString(2).match(/1/g) || []).length, 0);
+    }
+}
+
+// ==================== HP RENDERER (pour reverse Allied → HP) ====================
+class HPRenderer {
+    render(model) {
+        const lines = [];
+        
+        lines.push('#', `# HP Comware Configuration`, `# Generated from ${VendorDetector.getVendorName(model.metadata.source_vendor)}`, `# Date: ${new Date().toISOString()}`, '#', '');
+        
+        if (model.global.hostname) { lines.push(`sysname ${model.global.hostname}`, '#'); }
+        if (model.global.clock) { lines.push(`clock timezone ${model.global.clock}`, '#'); }
+        
+        // Global 802.1X
+        if (model.dot1x_global.enabled) {
+            if (model.dot1x_global.auth_method) lines.push(`dot1x authentication-method ${model.dot1x_global.auth_method}`);
+            if (model.dot1x_global.timers.quiet) lines.push(`dot1x timer quiet-period ${model.dot1x_global.timers.quiet}`);
+            if (model.dot1x_global.timers.reauth) lines.push(`dot1x timer reauth-period ${model.dot1x_global.timers.reauth}`);
+            lines.push('#');
+        }
+        
+        // Global MAC auth
+        if (model.mac_auth_global.domain) lines.push(`mac-authentication domain ${model.mac_auth_global.domain}`);
+        if (model.mac_auth_global.timers.offline) lines.push(`mac-authentication timer offline-detect ${model.mac_auth_global.timers.offline}`);
+        if (model.mac_auth_global.timers.quiet) lines.push(`mac-authentication timer quiet ${model.mac_auth_global.timers.quiet}`);
+        if (model.mac_auth_global.domain || Object.keys(model.mac_auth_global.timers).length > 0) lines.push('#');
+        
+        // Port security
+        if (model.port_security_global.enabled) { lines.push('port-security enable', '#'); }
+        
+        // DNS
+        if (model.services.dns.domain) lines.push(`dns domain ${model.services.dns.domain}`);
+        for (const srv of model.services.dns.servers) lines.push(`dns server ${srv}`);
+        if (model.services.dns.domain || model.services.dns.servers.length > 0) lines.push('#');
+        
+        // LLDP
+        if (model.services.lldp.enabled) { lines.push('lldp global enable', '#'); }
+        
+        // VLANs
+        for (const v of model.vlans) {
+            lines.push(`vlan ${v.id}`);
+            if (v.name) lines.push(` name ${v.name}`);
+            lines.push('#');
+        }
+        
+        // HWTACACS
+        for (const t of model.aaa.tacacs_schemes) {
+            lines.push(`hwtacacs scheme ${t.name}`);
+            if (t.primary_auth) lines.push(` primary authentication ${t.primary_auth}`);
+            if (t.primary_author) lines.push(` primary authorization ${t.primary_author}`);
+            if (t.primary_acct) lines.push(` primary accounting ${t.primary_acct}`);
+            if (t.secondary_auth) lines.push(` secondary authentication ${t.secondary_auth}`);
+            if (t.secondary_author) lines.push(` secondary authorization ${t.secondary_author}`);
+            if (t.secondary_acct) lines.push(` secondary accounting ${t.secondary_acct}`);
+            if (t.key_auth) lines.push(` key authentication cipher <REPLACE_KEY>`);
+            if (t.key_author) lines.push(` key authorization cipher <REPLACE_KEY>`);
+            if (t.key_acct) lines.push(` key accounting cipher <REPLACE_KEY>`);
+            if (t.nas_ip) lines.push(` nas-ip ${t.nas_ip}`);
+            lines.push('#');
+        }
+        
+        // RADIUS
+        for (const r of model.aaa.radius_schemes) {
+            lines.push(`radius scheme ${r.name}`);
+            if (r.primary_auth) lines.push(` primary authentication ${r.primary_auth}`);
+            if (r.primary_acct) lines.push(` primary accounting ${r.primary_acct}`);
+            for (const sec of r.secondary_auth) lines.push(` secondary authentication ${sec}`);
+            for (const sec of r.secondary_acct) lines.push(` secondary accounting ${sec}`);
+            if (r.key_auth) lines.push(` key authentication cipher <REPLACE_KEY>`);
+            if (r.key_acct) lines.push(` key accounting cipher <REPLACE_KEY>`);
+            if (r.nas_ip) lines.push(` nas-ip ${r.nas_ip}`);
+            lines.push('#');
+        }
+        
+        // Domains
+        for (const d of model.aaa.domains) {
+            lines.push(`domain ${d.name}`);
+            for (const a of d.auth_login) lines.push(` authentication login ${a}`);
+            for (const a of d.author_login) lines.push(` authorization login ${a}`);
+            for (const a of d.acct_login) lines.push(` accounting login ${a}`);
+            for (const a of d.auth_lan) lines.push(` authentication lan-access ${a}`);
+            for (const a of d.author_lan) lines.push(` authorization lan-access ${a}`);
+            lines.push('#');
+        }
+        
+        // SVIs
+        for (const svi of model.svis) {
+            if (svi.ip && svi.mask) {
+                lines.push(`interface ${svi.name}`, ` ip address ${svi.ip} ${svi.mask}`, '#');
+            }
+        }
+        
+        // Interfaces
+        for (const iface of model.interfaces) {
+            lines.push(`interface ${iface.name}`);
+            if (iface.description) lines.push(` description ${iface.description}`);
+            if (iface.mode === 'access' && iface.access_vlan) lines.push(` port access vlan ${iface.access_vlan}`);
+            if (iface.mode === 'trunk') {
+                lines.push(' port link-type trunk');
+                if (iface.trunk_native) lines.push(` port trunk pvid vlan ${iface.trunk_native}`);
+                if (iface.trunk_allowed) lines.push(` port trunk permit vlan ${iface.trunk_allowed}`);
+            }
+            if (iface.dot1x) lines.push(' dot1x');
+            if (iface.dot1x_max) lines.push(` dot1x max-user ${iface.dot1x_max}`);
+            if (iface.mac_auth) lines.push(' mac-authentication');
+            if (iface.mac_auth_max) lines.push(` mac-authentication max-user ${iface.mac_auth_max}`);
+            if (iface.guest_vlan) {
+                lines.push(` dot1x guest-vlan ${iface.guest_vlan}`);
+                lines.push(` mac-authentication guest-vlan ${iface.guest_vlan}`);
+            }
+            if (iface.stp_edge) lines.push(' stp edged-port');
+            if (iface.broadcast_suppression) lines.push(` broadcast-suppression kbps ${iface.broadcast_suppression}`);
+            if (iface.port_security) lines.push(` ${iface.port_security}`);
+            lines.push('#');
+        }
+        
+        // Routes
+        for (const r of model.routing.static_routes) {
+            lines.push(`ip route-static ${r.dest} ${r.mask} ${r.gateway}`);
+        }
+        if (model.routing.static_routes.length > 0) lines.push('#');
+        
+        // NTP
+        if (model.services.ntp.enabled) {
+            for (const srv of model.services.ntp.servers) {
+                lines.push(`ntp-service unicast-server ${srv.ip}${srv.prefer ? ' priority' : ''}`);
+            }
+            if (model.services.ntp.source_interface) lines.push(`ntp-service source ${model.services.ntp.source_interface}`);
+            lines.push('#');
+        }
+        
+        // Syslog
+        if (model.services.syslog.hosts.length > 0) {
+            for (const host of model.services.syslog.hosts) lines.push(`info-center loghost ${host}`);
+            if (model.services.syslog.source_interface) lines.push(`info-center loghost source ${model.services.syslog.source_interface}`);
+            lines.push('#');
+        }
+        
+        // SNMP
+        if (model.services.snmp.enabled) {
+            lines.push('snmp-agent');
+            if (model.services.snmp.contact) lines.push(`snmp-agent sys-info contact ${model.services.snmp.contact}`);
+            if (model.services.snmp.location) lines.push(`snmp-agent sys-info location ${model.services.snmp.location}`);
+            if (model.services.snmp.version) lines.push(`snmp-agent sys-info version ${model.services.snmp.version}`);
+            lines.push('#');
+        }
+        
+        // SSH
+        if (model.services.ssh.enabled) { lines.push('ssh server enable', '#'); }
+        
+        // VTY
+        for (const vty of model.vty_lines) {
+            lines.push(`line vty ${vty.start} ${vty.end}`);
+            if (vty.auth_mode) lines.push(` authentication-mode ${vty.auth_mode}`);
+            if (vty.role) lines.push(` user-role ${vty.role}`);
+            if (vty.idle_timeout) lines.push(` idle-timeout ${vty.idle_timeout}`);
+            if (vty.protocol === 'ssh') lines.push(' protocol inbound ssh');
+            lines.push('#');
+        }
+        
+        // Local users
+        for (const user of model.local_users) {
+            lines.push(`local-user ${user.name} class ${user.class || 'manage'}`);
+            lines.push(` password hash <REPLACE_PASSWORD>`);
+            if (user.service_type) lines.push(` service-type ${user.service_type}`);
+            if (user.role) lines.push(` authorization-attribute user-role ${user.role}`);
+            lines.push('#');
+        }
+        
+        lines.push('return');
+        return lines.join('\n');
+    }
+}
+
+// ==================== GLOBAL STATE ====================
+let currentModel = null;
+let currentSource = null;
+let currentTarget = null;
+let batchFiles = [];
+
+// ==================== UI INITIALIZATION ====================
+document.addEventListener('DOMContentLoaded', () => {
+    setupDragDrop();
+    setupEventListeners();
+    setupModeSwitcher();
+    showStatus('Ready - Drop a file or load sample', 'info');
+});
+
+function setupDragDrop() {
+    const zones = ['dropZone', 'batchDropZone'];
+    const inputs = { dropZone: 'fileInput', batchDropZone: 'batchFileInput' };
+    
+    zones.forEach(zoneId => {
+        const zone = document.getElementById(zoneId);
+        const input = document.getElementById(inputs[zoneId]);
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+            zone.addEventListener(e, evt => { evt.preventDefault(); evt.stopPropagation(); });
+        });
+        
+        ['dragenter', 'dragover'].forEach(e => zone.addEventListener(e, () => zone.classList.add('dragover')));
+        ['dragleave', 'drop'].forEach(e => zone.addEventListener(e, () => zone.classList.remove('dragover')));
+        
+        zone.addEventListener('drop', e => {
+            const files = e.dataTransfer.files;
+            if (zoneId === 'dropZone' && files.length === 1) handleSingleFile(files[0]);
+            else if (zoneId === 'batchDropZone') handleBatchFiles(Array.from(files));
+        });
+        
+        zone.addEventListener('click', () => input.click());
+        input.addEventListener('change', e => {
+            if (zoneId === 'dropZone' && e.target.files.length === 1) handleSingleFile(e.target.files[0]);
+            else if (zoneId === 'batchDropZone') handleBatchFiles(Array.from(e.target.files));
+        });
+    });
+}
+
+function setupEventListeners() {
+    document.getElementById('btnConvert').addEventListener('click', convertConfig);
+    document.getElementById('btnReverse').addEventListener('click', reverseConversion);
+    document.getElementById('btnLoadSample').addEventListener('click', loadSample);
+    document.getElementById('btnClear').addEventListener('click', clearAll);
+    document.getElementById('btnDownload').addEventListener('click', downloadTarget);
+    document.getElementById('btnCopy').addEventListener('click', () => copyToClipboard(document.getElementById('targetConfig').value, 'Config copied!'));
+    document.getElementById('btnApplyKeys').addEventListener('click', applyKeysToConfig);
+    document.getElementById('btnApplyBatchKeys').addEventListener('click', applyKeysToBatch);
+    document.getElementById('sourceConfig').addEventListener('input', detectVendorOnInput);
+}
+
+function setupModeSwitcher() {
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            const mode = btn.dataset.mode;
+            document.getElementById('singleMode').classList.toggle('hidden', mode !== 'single');
+            document.getElementById('batchMode').classList.toggle('hidden', mode !== 'batch');
+        });
+    });
+}
+
+// ==================== SINGLE FILE MODE ====================
+function handleSingleFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+        document.getElementById('sourceConfig').value = e.target.result;
+        detectVendorOnInput();
+        showStatus(`Loaded: ${file.name}`, 'success');
+    };
+    reader.readAsText(file);
+}
+
+function detectVendorOnInput() {
+    const config = document.getElementById('sourceConfig').value.trim();
+    if (!config) {
+        document.getElementById('detectedVendor').classList.add('hidden');
+        return;
+    }
+    
+    const detection = VendorDetector.detect(config);
+    currentSource = detection.vendor;
+    
+    const detectedEl = document.getElementById('detectedVendor');
+    if (detection.vendor !== 'unknown') {
+        detectedEl.textContent = `Detected: ${VendorDetector.getVendorName(detection.vendor)} (${detection.confidence}% confidence)`;
+        detectedEl.classList.remove('hidden');
+    } else {
+        detectedEl.textContent = 'Unable to detect vendor - please verify configuration';
+        detectedEl.classList.remove('hidden');
+    }
+}
+
+function convertConfig() {
+    const sourceText = document.getElementById('sourceConfig').value.trim();
+    if (!sourceText) { showStatus('Please provide source configuration', 'error'); return; }
+    if (!currentSource || currentSource === 'unknown') { showStatus('Unable to detect vendor', 'error'); return; }
+    
+    try {
+        showStatus('Converting...', 'info');
+        
+        // Parse
+        const parser = currentSource === 'hp' ? new HPParser() : new AlliedParser();
+        currentModel = parser.parse(sourceText);
+        currentTarget = currentSource === 'hp' ? 'allied' : 'hp';
+        
+        // Render
+        const renderer = currentTarget === 'allied' ? new AlliedRenderer() : new HPRenderer();
+        const targetText = renderer.render(currentModel);
+        
+        // Display
+        document.getElementById('targetConfig').value = targetText;
+        document.getElementById('sourceMeta').textContent = `${VendorDetector.getVendorName(currentSource)} | ${sourceText.split('\n').length} lines`;
+        document.getElementById('targetMeta').textContent = `${VendorDetector.getVendorName(currentTarget)} | ${targetText.split('\n').length} lines`;
+        
+        // Enable buttons
+        document.getElementById('btnReverse').disabled = false;
+        document.getElementById('btnDownload').disabled = false;
+        document.getElementById('btnCopy').disabled = false;
+        
+        // Show and populate Key Manager
+        showKeyManager(currentModel, targetText);
+        
+        showStatus(`Converted ${VendorDetector.getVendorName(currentSource)} to ${VendorDetector.getVendorName(currentTarget)}`, 'success');
+    } catch (err) {
+        console.error(err);
+        showStatus(`Conversion error: ${err.message}`, 'error');
+    }
+}
+
+function reverseConversion() {
+    if (!currentModel) return;
+    
+    // Swap source and target
+    [currentSource, currentTarget] = [currentTarget, currentSource];
+    [document.getElementById('sourceConfig').value, document.getElementById('targetConfig').value] = 
+        [document.getElementById('targetConfig').value, document.getElementById('sourceConfig').value];
+    
+    const sourceMeta = document.getElementById('sourceMeta').textContent;
+    const targetMeta = document.getElementById('targetMeta').textContent;
+    document.getElementById('sourceMeta').textContent = targetMeta;
+    document.getElementById('targetMeta').textContent = sourceMeta;
+    
+    showStatus('Reversed: Now ' + VendorDetector.getVendorName(currentSource) + ' to ' + VendorDetector.getVendorName(currentTarget), 'info');
+}
+
+// ==================== KEY MANAGER ====================
+function collectCredentials(model) {
+    // RADIUS : 1 seul champ, tous les placeholders RADIUS sont listés
+    const radiusPlaceholders = [];
+    let hasRadius = false;
+    for (const r of model.aaa.radius_schemes) {
+        if (r.primary_auth && r.key_auth) {
+            radiusPlaceholders.push(`<REPLACE_KEY_${r.primary_auth.replace(/\./g, '_')}>`);
+            hasRadius = true;
+        }
+        for (const sec of r.secondary_auth) {
+            if (r.key_auth) radiusPlaceholders.push(`<REPLACE_KEY_${sec.replace(/\./g, '_')}>`);
+        }
+    }
+
+    // TACACS : 1 seul champ, tous les placeholders TACACS sont listés
+    const tacacsPlaceholders = [];
+    let hasTacacs = false;
+    for (const t of model.aaa.tacacs_schemes) {
+        if (t.primary_auth && t.key_auth) {
+            tacacsPlaceholders.push(`<REPLACE_KEY_${t.primary_auth.replace(/\./g, '_')}>`);
+            hasTacacs = true;
+        }
+        if (t.secondary_auth && t.key_auth) {
+            tacacsPlaceholders.push(`<REPLACE_KEY_${t.secondary_auth.replace(/\./g, '_')}>`);
+        }
+    }
+
+    // Users : 1 champ par user
+    const userPasswords = model.local_users.map(user => ({
+        username: user.name,
+        placeholder: `<REPLACE_PASSWORD_${user.name}>`
+    }));
+
+    return { hasRadius, radiusPlaceholders, hasTacacs, tacacsPlaceholders, userPasswords };
+}
+
+function buildKeyManagerHTML(creds) {
+    const { hasRadius, radiusPlaceholders, hasTacacs, tacacsPlaceholders, userPasswords } = creds;
+    if (!hasRadius && !hasTacacs && userPasswords.length === 0) return null;
+
+    let html = '';
+
+    if (hasRadius) {
+        html += '<div class="key-section">';
+        html += '<div class="key-section-title">RADIUS Key</div>';
+        html += '<div class="key-input-group">';
+        html += '<div class="key-label">Shared key (all servers)</div>';
+        html += `<input type="text" class="key-input" id="radius_shared" placeholder="Enter RADIUS key..." data-placeholders='${JSON.stringify(radiusPlaceholders)}' data-type="radius">`;
+        html += '</div></div>';
+    }
+
+    if (hasTacacs) {
+        html += '<div class="key-section">';
+        html += '<div class="key-section-title">TACACS+ Key</div>';
+        html += '<div class="key-input-group">';
+        html += '<div class="key-label">Shared key (all servers)</div>';
+        html += `<input type="text" class="key-input" id="tacacs_shared" placeholder="Enter TACACS+ key..." data-placeholders='${JSON.stringify(tacacsPlaceholders)}' data-type="tacacs">`;
+        html += '</div></div>';
+    }
+
+    if (userPasswords.length > 0) {
+        html += '<div class="key-section">';
+        html += '<div class="key-section-title">Local User Passwords</div>';
+        userPasswords.forEach((item, idx) => {
+            html += '<div class="key-input-group">';
+            html += `<div class="key-label">${item.username}</div>`;
+            html += `<input type="password" class="key-input" id="user_${idx}" placeholder="Enter password..." data-placeholders='${JSON.stringify([item.placeholder])}' data-type="user">`;
+            html += '</div>';
+        });
+        html += '</div>';
+    }
+
+    return html;
+}
+
+function applyCredentialsToConfig(config) {
+    const inputs = document.querySelectorAll('.key-input');
+    let replacements = 0;
+    inputs.forEach(input => {
+        const value = input.value.trim();
+        if (!value) return;
+        const placeholders = JSON.parse(input.dataset.placeholders || '[]');
+        placeholders.forEach(ph => {
+            const escaped = ph.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            config = config.replace(new RegExp(escaped, 'g'), value);
+        });
+        if (placeholders.length > 0) replacements++;
+    });
+    return { config, replacements };
+}
+
+function showKeyManager(model, configText) {
+    const creds = collectCredentials(model);
+    const html = buildKeyManagerHTML(creds);
+
+    if (!html) {
+        document.getElementById('keyManager').classList.add('hidden');
+        return;
+    }
+
+    document.getElementById('keyManagerContent').innerHTML = html;
+    document.getElementById('keyManager').classList.remove('hidden');
+}
+
+function applyKeysToConfig() {
+    let config = document.getElementById('targetConfig').value;
+    const { config: updated, replacements } = applyCredentialsToConfig(config);
+
+    if (replacements === 0) {
+        showStatus('No keys entered - fill in at least one field', 'warning');
+        return;
+    }
+
+    // Nettoyer les commentaires de remplacement manuel
+    const cleaned = updated.split('\n')
+        .filter(line => !line.includes('manual replacement required') && !line.includes('set new password'))
+        .join('\n');
+
+    document.getElementById('targetConfig').value = cleaned;
+    showStatus(`Applied ${replacements} credentials to configuration`, 'success');
+}
+
+// ==================== BATCH MODE ====================
+function handleBatchFiles(files) {
+    batchFiles = files.map(f => ({ file: f, status: 'queued', warnings: 0, model: null, output: null }));
+    
+    document.getElementById('batchContainer').classList.remove('hidden');
+    document.getElementById('batchStats').textContent = `${files.length} files`;
+    
+    renderBatchTable();
+    processBatchFiles();
+}
+
+function renderBatchTable() {
+    const tbody = document.getElementById('batchTableBody');
+    tbody.innerHTML = '';
+    
+    batchFiles.forEach((item, idx) => {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+            <td>${item.file.name}</td>
+            <td><span class="batch-status">${item.status}</span></td>
+            <td>${item.warnings > 0 ? `<span class="warning-count">${item.warnings}</span>` : '-'}</td>
+            <td>
+                ${item.status === 'done' ? `
+                    <button class="btn btn-secondary" onclick="viewBatchItem(${idx})">View</button>
+                    <button class="btn btn-secondary" onclick="downloadBatchItem(${idx})">Download</button>
+                ` : ''}
+            </td>
+        `;
+    });
+}
+
+async function processBatchFiles() {
+    let completed = 0;
+    
+    for (let i = 0; i < batchFiles.length; i++) {
+        const item = batchFiles[i];
+        item.status = 'processing';
+        renderBatchTable();
+        
+        try {
+            const text = await readFileText(item.file);
+            const detection = VendorDetector.detect(text);
+            
+            const parser = detection.vendor === 'hp' ? new HPParser() : new AlliedParser();
+            item.model = parser.parse(text);
+            
+            const targetVendor = detection.vendor === 'hp' ? 'allied' : 'hp';
+            const renderer = targetVendor === 'allied' ? new AlliedRenderer() : new HPRenderer();
+            item.output = renderer.render(item.model);
+            
+            item.warnings = item.model.checklist.length;
+            item.status = 'done';
+        } catch (err) {
+            item.status = 'error';
+            item.error = err.message;
+        }
+        
+        completed++;
+        const progress = Math.round((completed / batchFiles.length) * 100);
+        document.getElementById('batchProgressBar').style.width = `${progress}%`;
+        renderBatchTable();
+    }
+    
+    showStatus(`Batch complete: ${completed}/${batchFiles.length} files processed`, 'success');
+    showBatchKeyManager();
+}
+
+function readFileText(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = () => reject(new Error('File read error'));
+        reader.readAsText(file);
+    });
+}
+
+window.viewBatchItem = function(idx) {
+    const item = batchFiles[idx];
+    document.getElementById('modalTitle').textContent = item.file.name;
+    document.getElementById('modalConfig').textContent = item.output;
+    document.getElementById('batchModal').classList.remove('hidden');
+};
+
+window.closeBatchModal = function() {
+    document.getElementById('batchModal').classList.add('hidden');
+};
+
+// Close modal on overlay click
+document.addEventListener('click', (e) => {
+    if (e.target.id === 'batchModal') {
+        closeBatchModal();
+    }
+});
+
+window.downloadBatchItem = function(idx) {
+    const item = batchFiles[idx];
+    const blob = new Blob([item.output], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = item.file.name.replace(/\.cfg$/, '-converted.cfg');
+    a.click();
+    URL.revokeObjectURL(url);
+};
+
+function showBatchKeyManager() {
+    // Scanner tous les models des fichiers convertis avec succès
+    const doneItems = batchFiles.filter(f => f.status === 'done' && f.model);
+    if (doneItems.length === 0) return;
+
+    // Fusionner les credentials de tous les fichiers
+    const allRadiusPlaceholders = new Set();
+    const allTacacsPlaceholders = new Set();
+    const allUsers = new Map(); // username → placeholder
+    let hasRadius = false, hasTacacs = false;
+
+    for (const item of doneItems) {
+        const creds = collectCredentials(item.model);
+        if (creds.hasRadius) {
+            hasRadius = true;
+            creds.radiusPlaceholders.forEach(p => allRadiusPlaceholders.add(p));
+        }
+        if (creds.hasTacacs) {
+            hasTacacs = true;
+            creds.tacacsPlaceholders.forEach(p => allTacacsPlaceholders.add(p));
+        }
+        creds.userPasswords.forEach(u => allUsers.set(u.username, u.placeholder));
+    }
+
+    const userPasswords = Array.from(allUsers.entries()).map(([username, placeholder]) => ({ username, placeholder }));
+
+    const fakeCreds = {
+        hasRadius,
+        radiusPlaceholders: Array.from(allRadiusPlaceholders),
+        hasTacacs,
+        tacacsPlaceholders: Array.from(allTacacsPlaceholders),
+        userPasswords
+    };
+
+    const html = buildKeyManagerHTML(fakeCreds);
+    if (!html) return;
+
+    document.getElementById('batchKeyManagerContent').innerHTML = html;
+    document.getElementById('batchKeyManager').classList.remove('hidden');
+    document.getElementById('batchKeyManager').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function applyKeysToBatch() {
+    const doneItems = batchFiles.filter(f => f.status === 'done');
+    if (doneItems.length === 0) { showStatus('No completed files to update', 'warning'); return; }
+
+    // Lire les inputs du batch key manager
+    const inputs = document.querySelectorAll('#batchKeyManagerContent .key-input');
+    let anyFilled = false;
+    inputs.forEach(i => { if (i.value.trim()) anyFilled = true; });
+    if (!anyFilled) { showStatus('No keys entered - fill in at least one field', 'warning'); return; }
+
+    let totalFiles = 0;
+    for (const item of doneItems) {
+        let config = item.output;
+        const { config: updated, replacements } = applyCredentialsToConfig(config);
+        if (replacements > 0) {
+            item.output = updated.split('\n')
+                .filter(line => !line.includes('manual replacement required') && !line.includes('set new password'))
+                .join('\n');
+            totalFiles++;
+        }
+    }
+
+    showStatus(`Applied credentials to ${totalFiles} file(s)`, 'success');
+    document.getElementById('batchKeyManager').classList.add('hidden');
+}
+
+// ==================== UTILITIES ====================
+function loadSample() {
+    const sample = `sysname SWITCH-SAMPLE-01
+
+dns domain company.local
+dns server 10.0.1.10
+
+vlan 100
+ name PRODUCTION
+vlan 999
+ name QUARANTINE
+
+interface Vlan-interface1000
+ ip address 10.0.0.2 255.255.255.0
+
+interface GigabitEthernet1/0/1
+ description User workstation
+ port access vlan 100
+ stp edged-port
+ dot1x
+ mac-authentication
+ broadcast-suppression kbps 384
+
+interface GigabitEthernet1/0/24
+ description Uplink to core
+ port link-type trunk
+ port trunk permit vlan 1 100 999 1000
+
+hwtacacs scheme auth-server
+ primary authentication 10.10.0.10
+ key authentication cipher ENCRYPTED_KEY
+
+radius scheme wireless-auth
+ primary authentication 10.10.0.20
+ key authentication cipher ENCRYPTED_KEY
+
+domain default-domain
+ authentication login hwtacacs-scheme auth-server local
+ authentication lan-access radius-scheme wireless-auth
+
+info-center loghost 10.0.1.100
+info-center loghost source Vlan-interface1000
+
+snmp-agent
+snmp-agent sys-info contact Network Team
+snmp-agent sys-info location Data Center
+
+ssh server enable
+lldp global enable
+ntp-service unicast-server 10.0.1.1 priority
+
+line vty 0 63
+ authentication-mode scheme
+ user-role network-admin
+ idle-timeout 10
+ protocol inbound ssh
+
+local-user admin class manage
+ password hash $h$6$encrypted
+ service-type ssh`;
+    
+    document.getElementById('sourceConfig').value = sample;
+    detectVendorOnInput();
+    showStatus('Sample config loaded (anonymized)', 'success');
+}
+
+function clearAll() {
+    document.getElementById('sourceConfig').value = '';
+    document.getElementById('targetConfig').value = '';
+    currentModel = null;
+    currentSource = null;
+    currentTarget = null;
+    document.getElementById('detectedVendor').classList.add('hidden');
+    document.getElementById('sourceMeta').textContent = 'No file loaded';
+    document.getElementById('targetMeta').textContent = 'Waiting for conversion...';
+    document.getElementById('btnReverse').disabled = true;
+    document.getElementById('btnDownload').disabled = true;
+    document.getElementById('btnCopy').disabled = true;
+    showStatus('Cleared', 'info');
+}
+
+function downloadTarget() {
+    const text = document.getElementById('targetConfig').value;
+    const vendor = currentTarget || 'config';
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `config-${vendor}.cfg`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showStatus('Download started', 'success');
+}
+
+function copyToClipboard(text, msg) {
+    navigator.clipboard.writeText(text).then(() => showStatus(msg, 'success')).catch(() => showStatus('Copy failed', 'error'));
+}
+
+function showStatus(message, type = 'info') {
+    const bar = document.getElementById('statusBar');
+    const icons = { success: '', error: '', warning: '', info: '' };
+    bar.querySelector('.status-icon').textContent = icons[type] || '';
+    bar.querySelector('.status-message').textContent = message;
+    bar.className = `status-bar ${type} show`;
+    setTimeout(() => bar.classList.remove('show'), 3500);
+}
+    </script>
+</body>
+</html>
