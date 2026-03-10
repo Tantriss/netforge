@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Single-file HTML application that converts network switch configurations bidirectionally between **HP Comware** and **AlliedWare Plus** formats.
-Author: MDL BEAUJEAN Tristan | v3.x — 2026
+Author: Tantriss | v3.x — 2026
 
 ### Version history
 

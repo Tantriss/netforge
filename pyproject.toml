@@ -5,10 +5,10 @@ build-backend = "hatchling.build"
 [project]
 name = "netforge"
 version = "1.0.0"
-description = "Convert HP Comware <-> AlliedWare Plus switch configurations"
+description = "Multi-vendor network config converter"
 readme = "README.md"
 license = { text = "MIT" }
-authors = [{ name = "MDL BEAUJEAN Tristan" }]
+authors = [{ name = "Tantriss" }]
 keywords = ["network", "HP", "Comware", "AlliedWare", "switch", "config", "converter"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -31,7 +31,7 @@ dev = ["pytest>=7.0", "pytest-cov"]
 netforge = "netforge.__main__:cli"
 
 [project.urls]
-Repository = "https://github.com/MDL-BEAUJEAN-Tristan/netforge"
+Repository = "https://github.com/Tantriss/netforge"
 
 [tool.hatch.build.targets.wheel]
 packages = ["netforge"]
