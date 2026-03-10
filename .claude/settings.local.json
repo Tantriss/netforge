@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh repo view nextlevelbuilder/ui-ux-pro-max-skill --json name,description,defaultBranchRef)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(git clone --depth=1 https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git \"C:\\\\Users\\\\tryst\\\\AppData\\\\Local\\\\Temp\\\\ui-ux-pro-max-skill\")",
+      "Bash(mkdir -p /c/Users/tryst/OneDrive/Bureau/transpiller/.claude/skills/ui-ux-pro-max)",
+      "Bash(cp /c/Users/tryst/AppData/Local/Temp/ui-ux-pro-max-skill/.claude/skills/ui-ux-pro-max/SKILL.md /c/Users/tryst/OneDrive/Bureau/transpiller/.claude/skills/ui-ux-pro-max/SKILL.md)",
+      "Bash(cp -r /c/Users/tryst/AppData/Local/Temp/ui-ux-pro-max-skill/src/ui-ux-pro-max/data /c/Users/tryst/OneDrive/Bureau/transpiller/.claude/skills/ui-ux-pro-max/data)",
+      "Bash(cp -r /c/Users/tryst/AppData/Local/Temp/ui-ux-pro-max-skill/src/ui-ux-pro-max/scripts /c/Users/tryst/OneDrive/Bureau/transpiller/.claude/skills/ui-ux-pro-max/scripts)"
+    ]
+  }
+}

@@ -1,0 +1,117 @@
+#
+# HP Comware configuration
+# Device: SW-CORE-01
+#
+
+sysname SW-CORE-01
+
+#
+# VLANs
+#
+vlan 10
+ name Management
+vlan 20
+ name Servers
+vlan 100
+ name Users
+vlan 999
+ name Guest
+
+#
+# SVI
+#
+interface Vlan-interface10
+ ip address 10.0.10.1 255.255.255.0
+
+#
+# Interfaces
+#
+interface GigabitEthernet1/0/1
+ description Uplink-to-distribution
+ port link-type trunk
+ port trunk pvid vlan 10
+ port trunk permit vlan 10 20 100
+
+interface GigabitEthernet1/0/5
+ description User-dot1x-port
+ port link-type access
+ port access vlan 100
+ dot1x
+ mac-authentication
+ stp edged-port
+
+interface GigabitEthernet1/0/24
+ description Server-access-port
+ port link-type access
+ port access vlan 20
+ stp edged-port
+
+#
+# HWTACACS
+#
+hwtacacs scheme CORP-TACACS
+ primary authentication 10.0.0.10
+ primary authorization 10.0.0.10
+ primary accounting 10.0.0.10
+ secondary authentication 10.0.0.11
+ secondary authorization 10.0.0.11
+ secondary accounting 10.0.0.11
+ key authentication cipher ENCRYPTED_TACACS_KEY
+ nas-ip 10.0.10.1
+
+#
+# RADIUS
+#
+radius scheme CORP-RADIUS
+ primary authentication 10.0.0.20
+ primary accounting 10.0.0.20
+ key authentication cipher ENCRYPTED_RADIUS_KEY
+ timer response-timeout 3
+ retry 2
+ nas-ip 10.0.10.1
+
+#
+# AAA Domain
+#
+domain default
+ authentication login hwtacacs-scheme CORP-TACACS local
+ authorization login hwtacacs-scheme CORP-TACACS local
+ accounting login hwtacacs-scheme CORP-TACACS
+ authentication lan-access radius-scheme CORP-RADIUS local
+
+#
+# Services
+#
+ssh server enable
+lldp global enable
+
+ntp-service unicast-server 10.0.0.1 priority
+ntp-service unicast-server 10.0.0.2
+
+dns domain corp.local
+dns server 10.0.0.1
+
+info-center loghost 10.0.0.50
+
+snmp-agent
+snmp-agent sys-info contact NOC-Team
+snmp-agent sys-info location DataCenter-Row3
+
+#
+# VTY lines
+#
+line vty 0 63
+ authentication-mode scheme
+ user-role network-admin
+ idle-timeout 10
+ protocol inbound ssh
+
+#
+# Local users
+#
+local-user admin class manage
+ password hash $h$6$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ service-type ssh terminal
+ authorization-attribute user-role network-admin
+
+return

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "netforge"
+version = "1.0.0"
+description = "Convert HP Comware <-> AlliedWare Plus switch configurations"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "MDL BEAUJEAN Tristan" }]
+keywords = ["network", "HP", "Comware", "AlliedWare", "switch", "config", "converter"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Topic :: System :: Networking",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.9"
+dependencies = ["click>=8.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-cov"]
+
+[project.scripts]
+netforge = "netforge.__main__:cli"
+
+[project.urls]
+Repository = "https://github.com/MDL-BEAUJEAN-Tristan/netforge"
+
+[tool.hatch.build.targets.wheel]
+packages = ["netforge"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
