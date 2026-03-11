@@ -176,3 +176,147 @@ def test_hp_renderer_prefix_to_mask() -> None:
     assert r._prefix_to_mask(16) == "255.255.0.0"
     assert r._prefix_to_mask(0)  == "0.0.0.0"
     assert r._prefix_to_mask(32) == "255.255.255.255"
+
+
+# -- v1.1.0 regression tests --------------------------------------------------
+
+def test_hp_to_allied_switchport_first(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    lines = out.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("interface port"):
+            sub = [l.strip() for l in lines[i + 1:i + 5]
+                   if l.strip() and not l.strip().startswith("description")]
+            assert sub[0] == "switchport", f"Expected 'switchport' first under {line}, got {sub[0]}"
+            break
+
+
+def test_hp_to_allied_no_storm_control(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    assert "storm-control" not in out
+
+
+def test_hp_to_allied_no_port_security_comment(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    assert "switchport port-security" not in out
+    assert "! HP" not in out
+
+
+def test_hp_to_allied_auth_dynamic_vlan(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    assert "auth dynamic-vlan-creation" in out
+
+
+def test_hp_to_allied_vty_con0(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    assert "line con 0" in out
+    assert "exec-timeout 5 0" in out
+
+
+def test_hp_to_allied_vty_timeout_format(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    assert "exec-timeout 10 0" in out
+
+
+def test_hp_to_allied_no_domain_comment(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    assert "! Domain:" not in out
+
+
+def test_hp_to_allied_aaa_auth_mac(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    assert "aaa authentication auth-mac default" in out
+
+
+def test_hp_to_allied_no_service_http(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    assert "no service http" in out
+
+
+def test_hp_to_allied_no_service_telnet(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    assert "no service telnet" in out
+
+
+def test_hp_to_allied_ssh_timeout(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    assert "ssh server session-timeout 600 login-timeout 600" in out
+
+
+def test_hp_to_allied_snmp_no_ipv6(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    assert "no snmp-server ipv6" in out
+
+
+def test_hp_to_allied_snmp_trap_lldp(hp_config: str) -> None:
+    model = HPParser().parse(hp_config)
+    out = AlliedRenderer().render(model)
+    assert "snmp-server enable trap lldp" in out
+
+
+def test_hp_parser_sftp_enabled() -> None:
+    config = "ssh server enable\nsftp server enable\n"
+    from netforge.parsers.hp import HPParser
+    model = HPParser().parse(config)
+    assert model.ssh_enabled is True
+    assert model.sftp_enabled is True
+
+
+def test_hp_parser_snmp_v3_group() -> None:
+    config = (
+        "snmp-agent\n"
+        "snmp-agent group v3 GP_TEST privacy read-view iso write-view iso notify-view iso\n"
+    )
+    from netforge.parsers.hp import HPParser
+    model = HPParser().parse(config)
+    assert model.snmp_groups, "Expected SNMPGroup to be parsed"
+    g = model.snmp_groups[0]
+    assert g.name == "GP_TEST"
+    assert g.security_level == "priv"
+    assert g.read_view == "iso"
+
+
+def test_hp_parser_snmp_v3_user() -> None:
+    config = (
+        "snmp-agent\n"
+        "snmp-agent usm-user v3 TESTUSER GP_TEST cipher authentication-mode sha AUTHKEY privacy-mode aes128 PRIVKEY\n"
+    )
+    from netforge.parsers.hp import HPParser
+    model = HPParser().parse(config)
+    assert model.snmp_users, "Expected SNMPUser to be parsed"
+    u = model.snmp_users[0]
+    assert u.name == "TESTUSER"
+    assert u.group == "GP_TEST"
+    assert u.auth_protocol == "sha"
+    assert u.priv_protocol == "aes"
+
+
+def test_hp_parser_static_route() -> None:
+    config = "ip route-static 0.0.0.0 0.0.0.0 10.0.0.1\n"
+    from netforge.parsers.hp import HPParser
+    model = HPParser().parse(config)
+    assert model.static_routes
+    r = model.static_routes[0]
+    assert r.dest == "0.0.0.0"
+    assert r.gateway == "10.0.0.1"
+
+
+def test_hp_to_allied_static_route() -> None:
+    config = "ip route-static 0.0.0.0 0.0.0.0 10.0.0.1\n"
+    from netforge.parsers.hp import HPParser
+    from netforge.renderers.allied import AlliedRenderer
+    model = HPParser().parse(config)
+    out = AlliedRenderer().render(model)
+    assert "ip route 0.0.0.0/0 10.0.0.1" in out

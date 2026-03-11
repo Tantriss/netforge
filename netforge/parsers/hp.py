@@ -24,6 +24,9 @@ from netforge.models import (
     LocalUser,
     NtpServer,
     RadiusScheme,
+    SNMPGroup,
+    SNMPUser,
+    SNMPView,
     StaticRoute,
     TacacsScheme,
     UniversalConfig,
@@ -111,7 +114,7 @@ class HPParser:
                 continue
 
             # Only dispatch on top-level (indent == 0) lines.
-            if _indent(raw) != 0:
+            if _indent(raw) > 1:
                 i += 1
                 continue
 
@@ -404,6 +407,7 @@ class HPParser:
 
         All assignments are direct mutations on *model*; no return value.
         """
+        line = line.strip()
         # Hostname
         if line.startswith("sysname "):
             model.hostname = line[8:].strip()
@@ -443,6 +447,9 @@ class HPParser:
         if line == "ssh server enable":
             model.ssh_enabled = True
             return
+        if line == "sftp server enable":
+            model.sftp_enabled = True
+            return
         if line == "lldp global enable":
             model.lldp_enabled = True
             return
@@ -457,6 +464,59 @@ class HPParser:
             return
         if line.startswith("snmp-agent sys-info version "):
             model.snmp_version = line.split()[-1]
+            return
+
+        # SNMPv3 group: snmp-agent group v3 NAME privacy read-view X write-view X notify-view X
+        if line.startswith("snmp-agent group v3 "):
+            parts = line.split()
+            if len(parts) >= 4:
+                name = parts[3]
+                raw_level = parts[4] if len(parts) > 4 else "priv"
+                level_map = {"privacy": "priv", "authentication": "auth", "noauth": "noauth"}
+                sec = level_map.get(raw_level, "priv")
+                group = SNMPGroup(name=name, security_level=sec)
+                for kw, attr in (("read-view", "read_view"), ("write-view", "write_view"), ("notify-view", "notify_view")):
+                    if kw in parts:
+                        idx = parts.index(kw)
+                        if idx + 1 < len(parts):
+                            setattr(group, attr, parts[idx + 1])
+                model.snmp_groups.append(group)
+            return
+
+        # SNMPv3 MIB view: snmp-agent mib-view included NAME OID
+        if line.startswith("snmp-agent mib-view "):
+            parts = line.split()
+            if len(parts) >= 5:
+                included = parts[2] == "included"
+                view_name = parts[3]
+                oid = parts[4]
+                if not any(v.name == view_name for v in model.snmp_views):
+                    model.snmp_views.append(SNMPView(name=view_name, oid=oid, included=included))
+            return
+
+        # SNMPv3 USM user: snmp-agent usm-user v3 NAME GROUP cipher authentication-mode PROTO KEY privacy-mode PROTO KEY
+        if line.startswith("snmp-agent usm-user v3 "):
+            parts = line.split()
+            if len(parts) >= 5:
+                user = SNMPUser(name=parts[3], group=parts[4])
+                if "authentication-mode" in parts:
+                    idx = parts.index("authentication-mode")
+                    if idx + 1 < len(parts):
+                        user.auth_protocol = parts[idx + 1]
+                    if idx + 2 < len(parts):
+                        user.auth_key = parts[idx + 2]
+                if "privacy-mode" in parts:
+                    idx = parts.index("privacy-mode")
+                    if idx + 1 < len(parts):
+                        raw_priv = parts[idx + 1]
+                        user.priv_protocol = "aes" if raw_priv.startswith("aes") else raw_priv
+                    if idx + 2 < len(parts):
+                        user.priv_key = parts[idx + 2]
+                model.snmp_users.append(user)
+            return
+
+        # Silently ignore snmp-agent local-engineid and other snmp-agent sub-commands
+        if line.startswith("snmp-agent "):
             return
 
         # Port-security global enable

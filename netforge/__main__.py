@@ -22,6 +22,10 @@ Exit codes
 from __future__ import annotations
 
 import sys
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8')
 from pathlib import Path
 from typing import Optional
 

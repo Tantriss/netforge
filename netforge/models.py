@@ -9,7 +9,7 @@ No vendor-specific logic lives here.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import List, Optional
 
 
 # ── Leaf dataclasses ──────────────────────────────────────────────────────────
@@ -153,6 +153,39 @@ class NtpServer:
 
 
 @dataclass
+class SNMPGroup:
+    """An SNMPv3 group definition."""
+
+    name: str
+    security_level: str = "priv"         # noauth | auth | priv
+    read_view: Optional[str] = None
+    write_view: Optional[str] = None
+    notify_view: Optional[str] = None
+
+
+@dataclass
+class SNMPView:
+    """An SNMPv3 MIB view."""
+
+    name: str
+    oid: str = "1"
+    included: bool = True
+
+
+@dataclass
+class SNMPUser:
+    """An SNMPv3 USM user."""
+
+    name: str
+    group: str
+    auth_protocol: Optional[str] = None  # sha | md5
+    auth_key: Optional[str] = None
+    priv_protocol: Optional[str] = None  # aes | des
+    priv_key: Optional[str] = None
+    encrypted: bool = True
+
+
+@dataclass
 class UniversalConfig:
     """Vendor-agnostic intermediate representation of a switch configuration.
 
@@ -186,6 +219,7 @@ class UniversalConfig:
 
     # Services
     ssh_enabled: bool = False
+    sftp_enabled: bool = False
     ntp_servers: list[NtpServer] = field(default_factory=list)
     dns_servers: list[str] = field(default_factory=list)
     dns_domain: Optional[str] = None
@@ -195,6 +229,9 @@ class UniversalConfig:
     snmp_contact: Optional[str] = None
     snmp_location: Optional[str] = None
     snmp_version: Optional[str] = None
+    snmp_groups: list[SNMPGroup] = field(default_factory=list)
+    snmp_views: list[SNMPView] = field(default_factory=list)
+    snmp_users: list[SNMPUser] = field(default_factory=list)
 
     # Management
     vty_lines: list[VtyLine] = field(default_factory=list)

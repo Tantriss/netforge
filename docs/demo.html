@@ -1,3 +1,4 @@
+<!-- Note: CLI Python netforge v1.1.0 includes additional fixes -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -838,7 +839,7 @@ body::after {
 <header class="app-bar">
     <div class="app-bar-inner">
         <div class="app-brand">
-            <a href="https://tantriss.github.io/netforge/" style="font-size:0.75rem;color:var(--text-muted);text-decoration:none;border:1px solid var(--border);padding:3px 10px;margin-right:8px;transition:color 150ms,border-color 150ms;" onmouseover="this.style.color='var(--cyan)';this.style.borderColor='rgba(0,255,65,0.35)'" onmouseout="this.style.color='var(--text-muted)';this.style.borderColor='var(--border)'" aria-label="Back to netforge site">&larr; netforge</a>
+            <a href="https://netforgeapp.com" style="font-size:0.75rem;color:var(--text-muted);text-decoration:none;border:1px solid var(--border);padding:3px 10px;margin-right:8px;transition:color 150ms,border-color 150ms;" onmouseover="this.style.color='var(--cyan)';this.style.borderColor='rgba(0,255,65,0.35)'" onmouseout="this.style.color='var(--text-muted)';this.style.borderColor='var(--border)'" aria-label="Back to netforge site">&larr; netforge</a>
             <span class="brand-name">netforge</span>
 
         </div>
@@ -1179,7 +1180,10 @@ class UniversalConfig {
             ntp: { enabled: false, servers: [], source_interface: null },
             dns: { servers: [], domain: null },
             syslog: { hosts: [], source_interface: null },
-            snmp: { enabled: false, contact: null, location: null, version: null, engineid: null },
+            snmp: { enabled: false, contact: null, location: null, version: null, engineid: null,
+                    snmpGroups: [],   // { name, secLevel, readView, writeView, notifyView }
+                    snmpViews: [],    // { name, oid, included }
+                    snmpUsers: [] },  // { name, group, authProto, authKey, privProto, privKey }
             ssh: { enabled: false },
             lldp: { enabled: false }
         };
@@ -1261,7 +1265,7 @@ class HPParser {
             if (!t || t.startsWith('#') || t === 'return' || t === 'quit') continue;
 
             const indent = (line.match(/^(\s*)/) || ['', ''])[1].length;
-            if (indent !== 0) continue;
+            if (indent > 1) continue;
 
             if (t.match(/^vlan\s+\d+$/)) {
                 i = this.parseVlan(lines, i, model);
@@ -1465,6 +1469,46 @@ class HPParser {
         else if (t === 'ssh server enable') model.services.ssh.enabled = true;
         else if (t === 'lldp global enable') model.services.lldp.enabled = true;
         else if (t === 'snmp-agent') model.services.snmp.enabled = true;
+        else if (t.match(/^snmp-agent\s+sys-info\s+contact\s+(.+)/)) model.services.snmp.contact = t.match(/^snmp-agent\s+sys-info\s+contact\s+(.+)/)[1].trim();
+        else if (t.match(/^snmp-agent\s+sys-info\s+location\s+(.+)/)) model.services.snmp.location = t.match(/^snmp-agent\s+sys-info\s+location\s+(.+)/)[1].trim();
+        else if (t.match(/^snmp-agent\s+group\s+v3\s+/)) {
+            const parts = t.split(/\s+/);
+            // snmp-agent group v3 NAME [privacy|authentication|noauth] [read-view X] [write-view X] [notify-view X]
+            const name = parts[3];
+            const levelWord = parts[4] || '';
+            const secLevel = levelWord === 'privacy' ? 'priv' : levelWord === 'authentication' ? 'auth' : 'noauth';
+            let readView = null, writeView = null, notifyView = null;
+            for (let k = 5; k < parts.length; k++) {
+                if (parts[k] === 'read-view' && parts[k+1]) { readView = parts[k+1]; k++; }
+                else if (parts[k] === 'write-view' && parts[k+1]) { writeView = parts[k+1]; k++; }
+                else if (parts[k] === 'notify-view' && parts[k+1]) { notifyView = parts[k+1]; k++; }
+            }
+            model.services.snmp.snmpGroups.push({ name, secLevel, readView, writeView, notifyView });
+        }
+        else if (t.match(/^snmp-agent\s+mib-view\s+(included|excluded)\s+(\S+)\s+(\S+)/)) {
+            const m = t.match(/^snmp-agent\s+mib-view\s+(included|excluded)\s+(\S+)\s+(\S+)/);
+            const included = m[1] === 'included';
+            const name = m[2];
+            const oid = m[3];
+            if (!model.services.snmp.snmpViews.find(v => v.name === name && v.oid === oid)) {
+                model.services.snmp.snmpViews.push({ name, oid, included });
+            }
+        }
+        else if (t.match(/^snmp-agent\s+usm-user\s+v3\s+/)) {
+            const parts = t.split(/\s+/);
+            // snmp-agent usm-user v3 NAME GROUP [cipher] authentication-mode PROTO KEY privacy-mode PROTO KEY
+            const name = parts[3];
+            const group = parts[4];
+            let authProto = null, authKey = null, privProto = null, privKey = null;
+            const authIdx = parts.indexOf('authentication-mode');
+            if (authIdx !== -1) { authProto = parts[authIdx+1]; authKey = parts[authIdx+2]; }
+            const privIdx = parts.indexOf('privacy-mode');
+            if (privIdx !== -1) {
+                privProto = parts[privIdx+1] === 'aes128' ? 'aes' : parts[privIdx+1];
+                privKey = parts[privIdx+2];
+            }
+            model.services.snmp.snmpUsers.push({ name, group, authProto, authKey, privProto, privKey });
+        }
         else if (t.startsWith('dot1x ')) {
             model.dot1x_global.enabled = true;
             if (t.match(/authentication-method\s+(\w+)/)) model.dot1x_global.auth_method = t.match(/authentication-method\s+(\w+)/)[1];
@@ -1705,11 +1749,10 @@ class AlliedRenderer {
 
         if (model.global.hostname) { lines.push(`hostname ${model.global.hostname}`, ''); }
         if (model.services.ssh.enabled) {
-            lines.push('ssh server v2only');
             lines.push('ssh server session-timeout 600 login-timeout 600');
             lines.push('ssh server allow-users *');
             lines.push('service ssh');
-            lines.push('no service telnet', '');
+            lines.push('');
         }
 
         // TACACS
@@ -1751,19 +1794,25 @@ class AlliedRenderer {
         // AAA
         if (model.aaa.domains.length > 0) {
             lines.push('!', '! AAA Configuration', '!');
+            let enableEmitted = false;
             for (const d of model.aaa.domains) {
-                lines.push(`! Domain: ${d.name}`);
+                if (d.name === 'system') continue;
 
-                // Authentication
-                if (d.auth_enable.length > 0) {
-                    const methods = d.auth_enable.map(m => m.includes('hwtacacs') ? 'group tacacs+' : m.includes('radius') ? 'group radius' : m).join(' ');
-                    lines.push(`aaa authentication enable default ${methods} none`);
-                }
+                // login
                 if (d.auth_login.length > 0) {
                     const methods = d.auth_login.map(m => m.includes('hwtacacs') ? 'group tacacs+' : m.includes('radius') ? 'group radius' : m).join(' ');
                     lines.push(`aaa authentication login default ${methods}`);
                 }
                 lines.push(`aaa authentication login console local`);
+
+                // enable (once)
+                if (!enableEmitted && d.auth_enable.length > 0) {
+                    const methods = d.auth_enable.map(m => m.includes('hwtacacs') ? 'group tacacs+' : m.includes('radius') ? 'group radius' : m).join(' ');
+                    lines.push(`aaa authentication enable default ${methods} none`);
+                    enableEmitted = true;
+                }
+
+                // dot1x / auth-mac
                 if (d.auth_lan.length > 0) {
                     const methods = d.auth_lan.map(m => m.includes('radius') ? 'group radius' : m).join(' ');
                     lines.push(`aaa authentication dot1x default ${methods}`);
@@ -1772,14 +1821,19 @@ class AlliedRenderer {
 
                 // Authorization
                 if (d.author_login.length > 0 || d.author_enable.length > 0) {
-                    lines.push(`aaa authorization commands 1 default group tacacs+ none`);
-                    lines.push(`aaa authorization commands 7 default group tacacs+ none`);
-                    lines.push(`aaa authorization commands 15 default group tacacs+ none`);
+                    const authMethods = (d.author_login.length > 0 ? d.author_login : d.author_enable)
+                        .map(m => m.includes('hwtacacs') ? 'group tacacs+' : m.includes('radius') ? 'group radius' : m).join(' ');
+                    for (const level of [1, 7, 15]) {
+                        lines.push(`aaa authorization commands ${level} default ${authMethods} none`);
+                    }
                 }
 
-                // Accounting
+                // Accounting (no 'local' suffix)
                 if (d.acct_login.length > 0) {
-                    lines.push(`aaa accounting login default start-stop group tacacs+`);
+                    const acctMethods = d.acct_login
+                        .map(m => m.includes('hwtacacs') ? 'group tacacs+' : m.includes('radius') ? 'group radius' : m)
+                        .filter(t => t !== 'local').join(' ');
+                    lines.push(`aaa accounting login default start-stop ${acctMethods}`);
                 }
             }
             lines.push('');
@@ -1825,6 +1879,8 @@ class AlliedRenderer {
 
                 if (iface.description) lines.push(` description ${iface.description}`);
 
+                lines.push(' switchport');
+
                 if (iface.mode === 'access') {
                     lines.push(' switchport mode access');
                     if (iface.access_vlan) lines.push(` switchport access vlan ${iface.access_vlan}`);
@@ -1834,15 +1890,10 @@ class AlliedRenderer {
                     if (iface.trunk_allowed) lines.push(` switchport trunk allowed vlan ${iface.trunk_allowed}`);
                 }
 
-                if (iface.dot1x) lines.push(' dot1x port-control auto');
                 if (iface.mac_auth) lines.push(' auth-mac enable');
-                if (iface.guest_vlan) lines.push(` auth-mac guest-vlan ${iface.guest_vlan}`);
+                if (iface.dot1x) lines.push(' dot1x port-control auto');
+                if (iface.dot1x && iface.mac_auth) lines.push(' auth dynamic-vlan-creation');
                 if (iface.stp_edge) lines.push(' spanning-tree edgeport');
-                if (iface.broadcast_suppression) lines.push(` storm-control broadcast level ${iface.broadcast_suppression}`);
-                if (iface.port_security) {
-                    lines.push(' switchport port-security');
-                    lines.push(` ! HP: ${iface.port_security} - Verify Allied equivalent`);
-                }
 
                 lines.push('exit', '');
             }
@@ -1898,9 +1949,27 @@ class AlliedRenderer {
         // SNMP
         if (model.services.snmp.enabled) {
             lines.push('!', '! SNMP', '!');
+            lines.push('no snmp-server ipv6');
             if (model.services.snmp.contact) lines.push(`snmp-server contact ${model.services.snmp.contact}`);
             if (model.services.snmp.location) lines.push(`snmp-server location ${model.services.snmp.location}`);
-            lines.push('snmp-server enable', '');
+            lines.push('snmp-server enable trap lldp');
+            for (const g of (model.services.snmp.snmpGroups || [])) {
+                let line = `snmp-server group ${g.name} ${g.secLevel}`;
+                if (g.readView) line += ` read ${g.readView}`;
+                if (g.writeView) line += ` write ${g.writeView}`;
+                if (g.notifyView) line += ` notify ${g.notifyView}`;
+                lines.push(line);
+            }
+            for (const v of (model.services.snmp.snmpViews || [])) {
+                lines.push(`snmp-server view ${v.name} ${v.oid} ${v.included ? 'included' : 'excluded'}`);
+            }
+            for (const u of (model.services.snmp.snmpUsers || [])) {
+                let line = `snmp-server user ${u.name} ${u.group} encrypted`;
+                if (u.authProto && u.authKey) line += ` auth ${u.authProto} ${u.authKey}`;
+                if (u.privProto && u.privKey) line += ` priv ${u.privProto} ${u.privKey}`;
+                lines.push(line);
+            }
+            lines.push('');
         }
 
         // LLDP
@@ -1911,12 +1980,15 @@ class AlliedRenderer {
         // VTY Lines
         if (model.vty_lines.length > 0) {
             lines.push('!', '! VTY Lines', '!');
+            lines.push('line con 0');
+            lines.push(' exec-timeout 5 0');
+            lines.push('exit');
+            lines.push('');
             for (const vty of model.vty_lines) {
                 const alliedEnd = Math.min(vty.end, 15); // Allied typically 0-15
                 lines.push(`line vty ${vty.start} ${alliedEnd}`);
-                if (vty.idle_timeout) lines.push(` exec-timeout ${vty.idle_timeout}`);
+                if (vty.idle_timeout) lines.push(` exec-timeout ${vty.idle_timeout} 0`);
                 if (vty.protocol === 'ssh') lines.push(' transport input ssh');
-                if (vty.role) lines.push(` ! Map HP role "${vty.role}" to privilege level (typically 15)`);
                 lines.push('exit', '');
             }
         }
@@ -1943,6 +2015,10 @@ class AlliedRenderer {
             lines.push('clock summer-time CET recurring 5 Sun Mar 02:00 5 Sun Oct 03:00 60', '');
         }
 
+        lines.push('!', '! Security', '!');
+        lines.push('no service http');
+        lines.push('no service telnet');
+        lines.push('');
         lines.push('end');
         return lines.join('\n');
     }

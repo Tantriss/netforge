@@ -14,6 +14,7 @@ Author: Tantriss | v3.x — 2026
 | `transpiler-v2_2-WITH-KEY-MANAGER (1).html` | v2.2 | Original — reference source |
 | `transpiler-v3_0-PROFESSIONAL.html` | v3.0 | Full UI/UX redesign, logic identical to v2.2 |
 | `demo.html` | v3.1 | AlliedParser implemented, parsers refactored, inline test suite |
+| netforge Python CLI | v1.1.0 | Bug fixes terrain (AAA, SSH, SNMP v3, VTY, routes, Windows encoding) |
 
 **Active file to edit: `demo.html`**
 
@@ -184,3 +185,4 @@ Add an entry to the `TEST_CASES` const array in the Constants section:
 - Mask-to-prefix conversion uses bit-counting (handles any valid mask)
 - Allied VTY lines capped at 0-15 (Allied limit)
 - `AlliedParser` AAA mapping is best-effort — complex multi-domain HP configs may not fully round-trip
+- `demo.html` standalone JS is independent from the Python CLI — bugs fixed in v1.1.0 CLI are not automatically reflected in the HTML demo

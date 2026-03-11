@@ -1,6 +1,6 @@
 # netforge
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Python](https://img.shields.io/badge/python-%3E%3D3.9-blue)
 
@@ -156,6 +156,21 @@ placeholders that the Key Manager can replace:
 pip install -e ".[dev]"
 pytest tests/ -v --tb=short
 ```
+
+---
+
+## Changelog
+
+See [GitHub Releases](https://github.com/Tantriss/netforge/releases) for full history.
+
+### v1.1.0
+
+- Fix hostname parsing on indented HP Comware configs
+- Fix SSH, SNMP v3, static routes not converted
+- Fix AAA duplicates and wrong suffixes
+- Fix VTY lines format
+- Add `no service http` / `no service telnet` systematically
+- Fix UnicodeEncodeError on Windows
 
 ---
 

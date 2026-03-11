@@ -169,26 +169,40 @@ class AlliedRenderer:
 
         HP canonical method strings (``hwtacacs-scheme NAME local``) are
         converted to Allied ``group tacacs+``/``group radius`` form.
+        Order: enable → login → authorization (1,7,15) → accounting → dot1x → auth-mac.
+        The built-in "system" domain is silently skipped.
         """
         if not model.domains:
             return
+        has_tacacs = bool(model.tacacs_schemes)
         lines += ["!", "! AAA", "!"]
+        enable_emitted = False
         for domain in model.domains:
+            if domain.name == "system":
+                continue
             if domain.auth_login:
                 methods = _methods_to_allied(domain.auth_login)
                 lines.append(f"aaa authentication login default {methods}")
+            if has_tacacs and not enable_emitted:
+                lines.append("aaa authentication enable default group tacacs+ none")
+                enable_emitted = True
+            if domain.author_login:
+                methods = " ".join(
+                    t for t in _methods_to_allied(domain.author_login).split()
+                    if t != "local"
+                )
+                for level in (1, 7, 15):
+                    lines.append(f"aaa authorization commands {level} default {methods} none")
+            if domain.acct_login:
+                methods = " ".join(
+                    t for t in _methods_to_allied(domain.acct_login).split()
+                    if t != "local"
+                )
+                lines.append(f"aaa accounting login default start-stop {methods}")
             if domain.auth_lan:
                 methods = _methods_to_allied(domain.auth_lan)
                 lines.append(f"aaa authentication dot1x default {methods}")
-            if domain.auth_enable:
-                methods = _methods_to_allied(domain.auth_enable)
-                lines.append(f"aaa authentication enable default {methods} none")
-            if domain.author_login:
-                methods = _methods_to_allied(domain.author_login)
-                lines.append(f"aaa authorization commands 15 default {methods}")
-            if domain.acct_login:
-                methods = _methods_to_allied(domain.acct_login)
-                lines.append(f"aaa accounting exec default start-stop {methods}")
+                lines.append(f"aaa authentication auth-mac default {methods}")
         lines.append("")
 
     @staticmethod
@@ -208,7 +222,12 @@ class AlliedRenderer:
 
     @staticmethod
     def _render_interfaces(lines: list[str], model: UniversalConfig) -> None:
-        """Emit ``interface port<X>.<Y>.<Z>`` blocks for physical ports."""
+        """Emit ``interface port<X>.<Y>.<Z>`` blocks for physical ports.
+
+        Order per port: switchport → mode/vlan → auth-mac → dot1x →
+        auth dynamic-vlan-creation (when both auth active) → stp edge.
+        storm-control and port-security are intentionally omitted.
+        """
         physical = [iface for iface in model.interfaces if iface.type == "physical"]
         if not physical:
             return
@@ -218,6 +237,7 @@ class AlliedRenderer:
             lines.append(f"interface {allied_name}")
             if iface.description:
                 lines.append(f" description {iface.description}")
+            lines.append(" switchport")
             if iface.mode == "access":
                 lines.append(" switchport mode access")
                 if iface.access_vlan:
@@ -227,22 +247,18 @@ class AlliedRenderer:
                 if iface.trunk_native:
                     lines.append(f" switchport trunk native vlan {iface.trunk_native}")
                 if iface.trunk_allowed:
-                    # IR stores space-separated; Allied uses comma-separated.
                     allowed = iface.trunk_allowed.replace(" ", ",")
                     lines.append(f" switchport trunk allowed vlan {allowed}")
-            if iface.dot1x:
-                lines.append(" dot1x port-control auto")
             if iface.mac_auth:
                 lines.append(" auth-mac enable")
+            if iface.dot1x:
+                lines.append(" dot1x port-control auto")
+            if iface.dot1x and iface.mac_auth:
+                lines.append(" auth dynamic-vlan-creation")
             if iface.guest_vlan is not None:
                 lines.append(f" auth-mac guest-vlan {iface.guest_vlan}")
             if iface.stp_edge:
                 lines.append(" spanning-tree edgeport")
-            if iface.broadcast_suppression is not None:
-                lines.append(f" storm-control broadcast level {iface.broadcast_suppression}")
-            if iface.port_security:
-                lines.append(" switchport port-security")
-                lines.append(f" ! HP port-security: {iface.port_security} — verify Allied equivalent")
             lines += ["exit", ""]
 
     @staticmethod
@@ -258,17 +274,19 @@ class AlliedRenderer:
 
     @staticmethod
     def _render_services(lines: list[str], model: UniversalConfig) -> None:
-        """Emit SSH, NTP, LLDP, DNS, syslog, and SNMP service statements."""
+        """Emit SSH, NTP, LLDP, DNS, syslog, SNMP, and security service statements.
+
+        ``no service http`` and ``no service telnet`` are always emitted as
+        security best-practice regardless of the source config.
+        """
         if model.ssh_enabled:
             lines += [
                 "!",
                 "! SSH",
                 "!",
-                "ssh server v2only",
-                "ssh server session-timeout 600 login-timeout 60",
+                "ssh server session-timeout 600 login-timeout 600",
                 "ssh server allow-users *",
                 "service ssh",
-                "no service telnet",
                 "",
             ]
 
@@ -301,12 +319,37 @@ class AlliedRenderer:
 
         if model.snmp_enabled:
             lines += ["!", "! SNMP", "!"]
+            lines.append("no snmp-server ipv6")
             if model.snmp_contact:
                 lines.append(f"snmp-server contact {model.snmp_contact}")
             if model.snmp_location:
                 lines.append(f"snmp-server location {model.snmp_location}")
-            lines.append("snmp-server enable")
+            lines.append("snmp-server enable trap lldp")
+            for group in model.snmp_groups:
+                parts = [f"snmp-server group {group.name} {group.security_level}"]
+                if group.read_view:
+                    parts.append(f"read {group.read_view}")
+                if group.write_view:
+                    parts.append(f"write {group.write_view}")
+                if group.notify_view:
+                    parts.append(f"notify {group.notify_view}")
+                lines.append(" ".join(parts))
+            for view in model.snmp_views:
+                incl = "included" if view.included else "excluded"
+                lines.append(f"snmp-server view {view.name} {view.oid} {incl}")
+            for user in model.snmp_users:
+                u_line = f"snmp-server user {user.name} {user.group}"
+                if user.encrypted:
+                    u_line += " encrypted"
+                if user.auth_protocol and user.auth_key:
+                    u_line += f" auth {user.auth_protocol} {user.auth_key}"
+                if user.priv_protocol and user.priv_key:
+                    u_line += f" priv {user.priv_protocol} {user.priv_key}"
+                lines.append(u_line)
             lines.append("")
+
+        # Security best-practice — always emitted
+        lines += ["!", "! Security", "!", "no service http", "no service telnet", ""]
 
     @staticmethod
     def _render_local_users(lines: list[str], model: UniversalConfig) -> None:
@@ -327,15 +370,22 @@ class AlliedRenderer:
 
     @staticmethod
     def _render_vty(lines: list[str], model: UniversalConfig) -> None:
-        """Emit ``line vty`` blocks, capping the end index at 15."""
+        """Emit console and VTY line blocks.
+
+        ``line con 0`` is always emitted before VTY lines.
+        exec-timeout uses the ``X 0`` format (minutes seconds).
+        VTY end index is capped at 15 (Allied limit).
+        """
         if not model.vty_lines:
             return
         lines += ["!", "! VTY Lines", "!"]
+        # Console line — always present
+        lines += ["line con 0", " exec-timeout 5 0", "exit", ""]
         for vty in model.vty_lines:
             end = min(vty.end, 15)
             lines.append(f"line vty {vty.start} {end}")
             if vty.idle_timeout is not None:
-                lines.append(f" exec-timeout {vty.idle_timeout}")
+                lines.append(f" exec-timeout {vty.idle_timeout} 0")
             if vty.protocol == "ssh":
                 lines.append(" transport input ssh")
             lines += ["exit", ""]
