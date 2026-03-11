@@ -13,9 +13,9 @@ Author: Tantriss | v3.x — 2026
 |---|---|---|
 | `transpiler-v2_2-WITH-KEY-MANAGER (1).html` | v2.2 | Original — reference source |
 | `transpiler-v3_0-PROFESSIONAL.html` | v3.0 | Full UI/UX redesign, logic identical to v2.2 |
-| `transpiler-v3_1.html` | v3.1 | AlliedParser implemented, parsers refactored, inline test suite |
+| `demo.html` | v3.1 | AlliedParser implemented, parsers refactored, inline test suite |
 
-**Active file to edit: `transpiler-v3_1.html`**
+**Active file to edit: `demo.html`**
 
 ---
 
